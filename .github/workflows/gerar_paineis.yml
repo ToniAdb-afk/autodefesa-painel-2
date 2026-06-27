@@ -27,41 +27,51 @@ jobs:
       - name: Instalar dependências
         run: pip install pandas openpyxl
 
+      - name: Listar arquivos em dados/
+        run: |
+          echo "=== Arquivos em dados/ ==="
+          find dados/ -type f
+          echo "=========================="
+
       - name: Gerar Painel de OS
         run: |
-          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "OSS\|painel" | head -1)
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -iE "OSS|painel.de.OS|painel_de_OS" | head -1)
+          if [ -z "$ARQUIVO" ]; then
+            ARQUIVO=$(find dados/ -name "*.xlsx" | grep -iv "BASE\|SANKHYA\|PAGAMENTO" | head -1)
+          fi
           if [ -n "$ARQUIVO" ]; then
-            echo "Gerando Painel OS com: $ARQUIVO"
+            echo "✅ Gerando Painel OS com: $ARQUIVO"
             python gerar_painel.py "$ARQUIVO"
-            ls -la *.html || echo "Nenhum HTML gerado"
             [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html && echo "✅ painel_os.html criado"
           else
-            echo "⚠️ Nenhum arquivo de OS encontrado em dados/"
-            find dados/ -type f
+            echo "⚠️ Nenhum arquivo de OS encontrado"
           fi
 
       - name: Gerar Painel Financeiro
         run: |
-          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "BASE\|SANKHYA\|PAGAMENTO" | head -1)
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -iE "BASE|SANKHYA|PAGAMENTO" | head -1)
           if [ -n "$ARQUIVO" ]; then
-            echo "Gerando Painel Financeiro com: $ARQUIVO"
-            python gerar_painel_pagamentos.py "$ARQUIVO" "OIP (1).webp"
-            ls -la *.html || echo "Nenhum HTML gerado"
+            echo "✅ Gerando Painel Financeiro com: $ARQUIVO"
+            LOGO=$(find . -maxdepth 1 -name "*.webp" | head -1)
+            if [ -n "$LOGO" ]; then
+              python gerar_painel_pagamentos.py "$ARQUIVO" "$LOGO"
+            else
+              python gerar_painel_pagamentos.py "$ARQUIVO"
+            fi
             [ -f index.html ] && mv index.html painel_pagamentos.html && echo "✅ painel_pagamentos.html criado"
           else
-            echo "⚠️ Nenhum arquivo financeiro encontrado em dados/"
-            find dados/ -type f
+            echo "⚠️ Nenhum arquivo financeiro encontrado"
           fi
 
       - name: Restaurar hub de entrada
-        run: |
-          cp hub_index.html index.html
-          echo "✅ index.html restaurado"
+        run: cp hub_index.html index.html
 
       - name: Commit e Push dos painéis
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add -f painel_os.html painel_pagamentos.html index.html 2>/dev/null || true
+          git add -f index.html
+          [ -f painel_os.html ] && git add -f painel_os.html
+          [ -f painel_pagamentos.html ] && git add -f painel_pagamentos.html
           git diff --staged --quiet || git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
           git push
