@@ -3,7 +3,7 @@ name: Gerar Painéis Autodefesa Brasil
 on:
   push:
     paths:
-      - 'dados/**.xlsx'
+      - 'dados/**'
   workflow_dispatch:
 
 permissions:
@@ -29,33 +29,39 @@ jobs:
 
       - name: Gerar Painel de OS
         run: |
-          ARQUIVO=$(ls dados/painel*.xlsx 2>/dev/null | head -1)
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "OSS\|painel" | head -1)
           if [ -n "$ARQUIVO" ]; then
+            echo "Gerando Painel OS com: $ARQUIVO"
             python gerar_painel.py "$ARQUIVO"
-            mv painel_OSS.html painel_os.html
-            echo "✅ Painel de OS gerado: $ARQUIVO"
+            ls -la *.html || echo "Nenhum HTML gerado"
+            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html && echo "✅ painel_os.html criado"
           else
-            echo "⚠️ Nenhum arquivo painel*.xlsx encontrado em dados/"
+            echo "⚠️ Nenhum arquivo de OS encontrado em dados/"
+            find dados/ -type f
           fi
 
       - name: Gerar Painel Financeiro
         run: |
-          ARQUIVO=$(ls dados/BASE*.xlsx 2>/dev/null | head -1)
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "BASE\|SANKHYA\|PAGAMENTO" | head -1)
           if [ -n "$ARQUIVO" ]; then
+            echo "Gerando Painel Financeiro com: $ARQUIVO"
             python gerar_painel_pagamentos.py "$ARQUIVO" "OIP (1).webp"
-            mv index.html painel_pagamentos.html
-            echo "✅ Painel Financeiro gerado: $ARQUIVO"
+            ls -la *.html || echo "Nenhum HTML gerado"
+            [ -f index.html ] && mv index.html painel_pagamentos.html && echo "✅ painel_pagamentos.html criado"
           else
-            echo "⚠️ Nenhum arquivo BASE*.xlsx encontrado em dados/"
+            echo "⚠️ Nenhum arquivo financeiro encontrado em dados/"
+            find dados/ -type f
           fi
 
       - name: Restaurar hub de entrada
-        run: cp hub_index.html index.html
+        run: |
+          cp hub_index.html index.html
+          echo "✅ index.html restaurado"
 
       - name: Commit e Push dos painéis
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add painel_os.html painel_pagamentos.html index.html
+          git add -f painel_os.html painel_pagamentos.html index.html 2>/dev/null || true
           git diff --staged --quiet || git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
           git push
