@@ -3,8 +3,11 @@ name: Gerar Painéis Autodefesa Brasil
 on:
   push:
     paths:
-      - 'dados/**.xlsx'   # dispara quando qualquer Excel na pasta dados/ for atualizado
-  workflow_dispatch:       # permite rodar manualmente pelo GitHub
+      - 'dados/**.xlsx'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -13,6 +16,8 @@ jobs:
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Instalar Python
         uses: actions/setup-python@v5
@@ -24,33 +29,33 @@ jobs:
 
       - name: Gerar Painel de OS
         run: |
-          ARQUIVO=$(ls dados/painel_de_OSS*.xlsx 2>/dev/null | head -1)
+          ARQUIVO=$(ls dados/painel*.xlsx 2>/dev/null | head -1)
           if [ -n "$ARQUIVO" ]; then
             python gerar_painel.py "$ARQUIVO"
             mv painel_OSS.html painel_os.html
-            echo "✅ Painel de OS gerado a partir de: $ARQUIVO"
+            echo "✅ Painel de OS gerado: $ARQUIVO"
           else
-            echo "⚠️ Nenhum arquivo painel_de_OSS*.xlsx encontrado em dados/"
+            echo "⚠️ Nenhum arquivo painel*.xlsx encontrado em dados/"
           fi
 
       - name: Gerar Painel Financeiro
         run: |
-          ARQUIVO=$(ls dados/BASE_DE_DADOS*.xlsx 2>/dev/null | head -1)
+          ARQUIVO=$(ls dados/BASE*.xlsx 2>/dev/null | head -1)
           if [ -n "$ARQUIVO" ]; then
-            python gerar_painel_pagamentos.py "$ARQUIVO" OIP__1_.webp
+            python gerar_painel_pagamentos.py "$ARQUIVO" "OIP (1).webp"
             mv index.html painel_pagamentos.html
-            echo "✅ Painel Financeiro gerado a partir de: $ARQUIVO"
+            echo "✅ Painel Financeiro gerado: $ARQUIVO"
           else
-            echo "⚠️ Nenhum arquivo BASE_DE_DADOS*.xlsx encontrado em dados/"
+            echo "⚠️ Nenhum arquivo BASE*.xlsx encontrado em dados/"
           fi
 
-      - name: Restaurar index.html (hub de entrada)
+      - name: Restaurar hub de entrada
         run: cp hub_index.html index.html
 
-      - name: Commit e Push dos painéis gerados
+      - name: Commit e Push dos painéis
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add painel_os.html painel_pagamentos.html index.html
-          git diff --staged --quiet || git commit -m "🤖 Painéis atualizados automaticamente [$(date '+%d/%m/%Y %H:%M')]"
+          git diff --staged --quiet || git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
           git push
