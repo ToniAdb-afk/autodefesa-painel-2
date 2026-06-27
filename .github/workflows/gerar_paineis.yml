@@ -1,0 +1,56 @@
+name: Gerar Painéis Autodefesa Brasil
+
+on:
+  push:
+    paths:
+      - 'dados/**.xlsx'   # dispara quando qualquer Excel na pasta dados/ for atualizado
+  workflow_dispatch:       # permite rodar manualmente pelo GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências
+        run: pip install pandas openpyxl
+
+      - name: Gerar Painel de OS
+        run: |
+          ARQUIVO=$(ls dados/painel_de_OSS*.xlsx 2>/dev/null | head -1)
+          if [ -n "$ARQUIVO" ]; then
+            python gerar_painel.py "$ARQUIVO"
+            mv painel_OSS.html painel_os.html
+            echo "✅ Painel de OS gerado a partir de: $ARQUIVO"
+          else
+            echo "⚠️ Nenhum arquivo painel_de_OSS*.xlsx encontrado em dados/"
+          fi
+
+      - name: Gerar Painel Financeiro
+        run: |
+          ARQUIVO=$(ls dados/BASE_DE_DADOS*.xlsx 2>/dev/null | head -1)
+          if [ -n "$ARQUIVO" ]; then
+            python gerar_painel_pagamentos.py "$ARQUIVO" OIP__1_.webp
+            mv index.html painel_pagamentos.html
+            echo "✅ Painel Financeiro gerado a partir de: $ARQUIVO"
+          else
+            echo "⚠️ Nenhum arquivo BASE_DE_DADOS*.xlsx encontrado em dados/"
+          fi
+
+      - name: Restaurar index.html (hub de entrada)
+        run: cp hub_index.html index.html
+
+      - name: Commit e Push dos painéis gerados
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add painel_os.html painel_pagamentos.html index.html
+          git diff --staged --quiet || git commit -m "🤖 Painéis atualizados automaticamente [$(date '+%d/%m/%Y %H:%M')]"
+          git push

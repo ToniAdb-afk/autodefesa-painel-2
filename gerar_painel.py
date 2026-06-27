@@ -1,0 +1,499 @@
+#!/usr/bin/env python3
+"""
+gerar_painel.py - Gerador do Painel de OS
+Uso: python gerar_painel.py [arquivo.xlsx]
+Requisito: pip install pandas openpyxl
+"""
+import pandas as pd
+import sys, os, json
+from datetime import datetime
+
+ARQUIVO = sys.argv[1] if len(sys.argv) > 1 else "painel_de_OSS.xlsx"
+SAIDA   = "painel_OSS.html"
+
+if not os.path.exists(ARQUIVO):
+    print(f"❌ Arquivo '{ARQUIVO}' não encontrado.")
+    sys.exit(1)
+
+print(f"📂 Lendo {ARQUIVO}...")
+
+# ── Leitura ──────────────────────────────────────────────────────────
+df = pd.read_excel(ARQUIVO, header=2)
+df['Dt. Abertura de OS'] = pd.to_datetime(df['Dt. Abertura de OS'], errors='coerce')
+df['Mes'] = df['Dt. Abertura de OS'].dt.to_period('M')
+
+emissao = datetime.now().strftime('%d/%m/%Y %H:%M')
+total_registros = len(df)
+
+# ── Cliente ──────────────────────────────────────────────────────────
+def extract_client(nome):
+    if pd.isna(nome): return 'Sem Cliente'
+    s = str(nome).upper()
+    for k in ['AGIBANK','WESTERN UNION','SICOOB','MERCANTIL','CREFISA']:
+        if k in s: return k
+    return s.split('-')[0].strip()
+
+df['Cliente'] = df['Nome Parceiro'].apply(extract_client)
+
+# ── Pivôs ────────────────────────────────────────────────────────────
+MOTIVOS  = ['IMPLANTAÇÃO DE PROJETO','MANUTENÇÃO PREVENTIVA','MANUTENÇÃO CORRETIVA',
+            'ATENDIMENTO REMOTO','GARANTIA','REVERSA']
+STATUSES = ['ATENDIMENTO FINALIZADO','AGUARDANDO ATENDIMENTO','EM ATENDIMENTO','EM TRATATIVAS INTERNAS']
+
+def safe_pivot(df, rows, cols, ensure_cols=None):
+    piv = df.groupby([rows, cols]).size().unstack(fill_value=0)
+    if ensure_cols:
+        for c in ensure_cols:
+            if c not in piv.columns: piv[c] = 0
+    return piv
+
+user_motivo   = safe_pivot(df, 'Nome (Usuário)', 'Descrição (Motivo - Service)', MOTIVOS)
+user_status   = safe_pivot(df, 'Nome (Usuário)', 'Descrição (Status de OS - Service)', STATUSES)
+client_motivo = safe_pivot(df, 'Cliente', 'Descrição (Motivo - Service)', MOTIVOS)
+client_status = safe_pivot(df, 'Cliente', 'Descrição (Status de OS - Service)', STATUSES)
+client_user   = df.groupby(['Cliente', 'Nome (Usuário)']).size().unstack(fill_value=0)
+monthly_raw   = safe_pivot(df, 'Mes', 'Descrição (Motivo - Service)', MOTIVOS)
+
+# ── Serialização JSON ─────────────────────────────────────────────────
+def pivot_to_list(piv, cols, index_name):
+    out = []
+    for idx, row in piv.iterrows():
+        rec = {index_name: str(idx)}
+        for c in cols:
+            rec[c] = int(row.get(c, 0))
+        out.append(rec)
+    return out
+
+def monthly_to_list(piv, cols):
+    MES = {'01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun',
+           '07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez'}
+    out = []
+    for idx, row in piv.iterrows():
+        label = MES.get(str(idx)[-2:], str(idx))
+        rec = {'Mes': label}
+        for c in cols:
+            rec[c] = int(row.get(c, 0))
+        out.append(rec)
+    return out
+
+def client_user_to_list(piv):
+    out = []
+    for idx, row in piv.iterrows():
+        rec = {'Cliente': str(idx)}
+        for col in piv.columns:
+            rec[col] = int(row[col])
+        out.append(rec)
+    return out
+
+js_um  = json.dumps(pivot_to_list(user_motivo,  MOTIVOS,  'Nome (Usuário)'), ensure_ascii=False)
+js_us  = json.dumps(pivot_to_list(user_status,  STATUSES, 'Nome (Usuário)'), ensure_ascii=False)
+js_cm  = json.dumps(pivot_to_list(client_motivo, MOTIVOS, 'Cliente'), ensure_ascii=False)
+js_cs  = json.dumps(pivot_to_list(client_status, STATUSES,'Cliente'), ensure_ascii=False)
+js_cu  = json.dumps(client_user_to_list(client_user), ensure_ascii=False)
+js_mon = json.dumps(monthly_to_list(monthly_raw, MOTIVOS), ensure_ascii=False)
+
+total_fin = int(df[df['Descrição (Status de OS - Service)']=='ATENDIMENTO FINALIZADO'].shape[0])
+total_agu = int(df[df['Descrição (Status de OS - Service)']=='AGUARDANDO ATENDIMENTO'].shape[0])
+
+data_min = df['Dt. Abertura de OS'].min()
+data_max = df['Dt. Abertura de OS'].max()
+periodo  = f"{data_min.strftime('%b/%Y')} – {data_max.strftime('%b/%Y')}" if pd.notna(data_min) else ''
+
+# ── HTML (sem f-string nos blocos JS) ────────────────────────────────
+JS_DATA = f"""
+const userMotivoRaw  = {js_um};
+const userStatusRaw  = {js_us};
+const clientMotivoRaw= {js_cm};
+const clientStatusRaw= {js_cs};
+const clientUserRaw  = {js_cu};
+const monthlyRaw     = {js_mon};
+const TOTAL          = {total_registros};
+const TOTAL_FIN      = {total_fin};
+const TOTAL_AGU      = {total_agu};
+const EMISSAO        = "{emissao}";
+const PERIODO        = "{periodo}";
+"""
+
+HTML_HEADER = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de OS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  :root{{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--text:#e6edf3;--text2:#8b949e;--blue:#1f6feb;--purple:#8957e5;--orange:#d29922;--red:#da3633;--green:#3fb950;--teal:#39c5cf;--yellow:#e3b341;}}
+  *{{margin:0;padding:0;box-sizing:border-box;}}
+  body{{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:48px;}}
+  .header{{background:linear-gradient(135deg,#0d1117,#161b22,#0d1117);border-bottom:1px solid var(--border);padding:28px 40px;}}
+  .header-inner{{max-width:1440px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:24px;}}
+  .header-left h1{{font-size:24px;font-weight:800;background:linear-gradient(135deg,#e6edf3,#58a6ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}}
+  .header-left p{{color:var(--text2);font-size:12px;margin-top:5px;}}
+  .header-kpis{{display:flex;gap:12px;}}
+  .hkpi{{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 18px;text-align:center;}}
+  .hkpi strong{{display:block;font-size:22px;font-weight:800;}}.hkpi span{{font-size:11px;color:var(--text2);}}
+  .nav{{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 40px;}}
+  .nav-inner{{max-width:1440px;margin:0 auto;display:flex;}}
+  .nav-tab{{padding:14px 22px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;}}
+  .nav-tab:hover{{color:var(--text);}}.nav-tab.active{{color:var(--text);border-bottom-color:var(--blue);}}
+  .page{{display:none;}}.page.active{{display:block;}}
+  .container{{max-width:1440px;margin:0 auto;padding:32px 40px 0;}}
+  .stitle{{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text2);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}}
+  .stitle .dot{{width:6px;height:6px;border-radius:50%;flex-shrink:0;}}
+  .kpi-grid{{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:28px;}}
+  .kpi-card{{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 16px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s;}}
+  .kpi-card:hover{{transform:translateY(-2px);}}.kpi-card::before{{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0;}}
+  .kpi-c1::before{{background:var(--blue)}}.kpi-c1:hover{{border-color:var(--blue)}}
+  .kpi-c2::before{{background:var(--orange)}}.kpi-c2:hover{{border-color:var(--orange)}}
+  .kpi-c3::before{{background:var(--red)}}.kpi-c3:hover{{border-color:var(--red)}}
+  .kpi-c4::before{{background:var(--teal)}}.kpi-c4:hover{{border-color:var(--teal)}}
+  .kpi-c5::before{{background:var(--purple)}}.kpi-c5:hover{{border-color:var(--purple)}}
+  .kpi-c6::before{{background:var(--text2)}}
+  .kpi-label{{font-size:10px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;}}
+  .kpi-value{{font-size:30px;font-weight:800;line-height:1;}}
+  .kpi-c1 .kpi-value{{color:var(--blue)}}.kpi-c2 .kpi-value{{color:var(--orange)}}.kpi-c3 .kpi-value{{color:var(--red)}}
+  .kpi-c4 .kpi-value{{color:var(--teal)}}.kpi-c5 .kpi-value{{color:var(--purple)}}.kpi-c6 .kpi-value{{color:var(--text2)}}
+  .kpi-sub{{font-size:10px;color:var(--text2);margin-top:5px;}}
+  .sbar-wrap{{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:28px;}}
+  .sbar-labels{{display:flex;gap:18px;margin-bottom:10px;flex-wrap:wrap;}}
+  .sbar-label{{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);}}.sbar-label strong{{color:var(--text);margin-left:3px;}}
+  .sdot{{width:8px;height:8px;border-radius:50%;flex-shrink:0;}}
+  .sbar{{height:12px;border-radius:8px;background:var(--bg3);overflow:hidden;display:flex;}}.sseg{{height:100%;}}
+  .charts-grid{{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:28px;}}
+  .chart-card{{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:22px;}}.chart-card.full{{grid-column:1/-1;}}
+  .chart-title{{font-size:14px;font-weight:600;margin-bottom:3px;}}.chart-sub{{font-size:11px;color:var(--text2);margin-bottom:18px;}}
+  .chart-wrap{{position:relative;height:260px;}}.chart-wrap.tall{{height:320px;}}
+  .team-suporte{{background:rgba(31,111,235,.12);color:#58a6ff;border:1px solid rgba(31,111,235,.3);padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}}
+  .team-rota{{background:rgba(137,87,229,.12);color:#a371f7;border:1px solid rgba(137,87,229,.3);padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}}
+  .team-outros{{background:rgba(139,148,158,.12);color:#8b949e;border:1px solid rgba(139,148,158,.3);padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}}
+  .group-header{{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:12px 16px;border-radius:10px;}}
+  .gh-suporte{{background:rgba(31,111,235,.08);border:1px solid rgba(31,111,235,.2);}}.gh-rota{{background:rgba(137,87,229,.08);border:1px solid rgba(137,87,229,.2);}}.gh-outros{{background:rgba(139,148,158,.08);border:1px solid rgba(139,148,158,.2);}}
+  .gh-icon{{font-size:20px;}}.gh-info strong{{font-size:14px;font-weight:700;}}.gh-info span{{font-size:11px;color:var(--text2);display:block;}}.gh-badge{{margin-left:auto;font-size:20px;font-weight:800;}}
+  .client-grid{{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:28px;}}
+  .client-card{{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px;transition:border-color .2s,transform .2s;}}.client-card:hover{{transform:translateY(-2px);}}
+  .client-logo{{font-size:22px;margin-bottom:8px;}}.client-name{{font-size:13px;font-weight:700;margin-bottom:4px;}}.client-total{{font-size:26px;font-weight:800;margin-bottom:6px;}}
+  .client-tags{{display:flex;flex-wrap:wrap;gap:4px;}}.ctag{{font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;}}
+  .table-card{{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:28px;overflow-x:auto;}}
+  table{{width:100%;border-collapse:collapse;font-size:12px;}}
+  th{{text-align:left;padding:9px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;}}
+  td{{padding:11px 12px;border-bottom:1px solid rgba(48,54,61,.4);vertical-align:middle;}}tr:last-child td{{border-bottom:none;}}tr:hover td{{background:rgba(255,255,255,.02);}}
+  .avatar{{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-right:8px;vertical-align:middle;}}
+  .uname{{font-weight:600;}}
+  .mini-bar-wrap{{display:flex;align-items:center;gap:6px;}}.mini-bar{{flex:1;height:5px;background:var(--bg3);border-radius:4px;overflow:hidden;max-width:90px;}}.mini-bar-fill{{height:100%;border-radius:4px;}}.mval{{font-size:12px;font-weight:600;min-width:26px;}}
+  .rank-grid{{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:28px;}}
+  .rank-card{{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:22px;}}
+  .rank-item{{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(48,54,61,.4);}}.rank-item:last-child{{border-bottom:none;}}
+  .rnum{{font-size:11px;font-weight:700;color:var(--text2);width:18px;text-align:center;flex-shrink:0;}}.rnum.top{{color:var(--yellow);}}
+  .rbar-wrap{{flex:1;}}.rname{{font-size:11px;font-weight:500;margin-bottom:3px;}}.rbar{{height:4px;background:var(--bg3);border-radius:4px;overflow:hidden;}}.rbar-fill{{height:100%;border-radius:4px;}}
+  .rcount{{font-size:13px;font-weight:700;flex-shrink:0;min-width:32px;text-align:right;}}
+  .footer{{text-align:center;color:var(--text2);font-size:11px;margin-top:24px;padding:0 40px;}}
+</style>
+</head>
+<body>
+<div class="header"><div class="header-inner">
+  <div class="header-left"><h1>📋 Painel de Ordens de Serviço</h1><p>Emissão: {emissao} &nbsp;·&nbsp; Período: {periodo} &nbsp;·&nbsp; 5 clientes</p></div>
+  <div class="header-kpis">
+    <div class="hkpi"><strong style="color:#58a6ff" id="hTotal">—</strong><span>Total OS</span></div>
+    <div class="hkpi"><strong style="color:#3fb950" id="hFin">—</strong><span>Finalizadas</span></div>
+    <div class="hkpi"><strong style="color:#e3b341" id="hAgu">—</strong><span>Aguardando</span></div>
+  </div>
+</div></div>
+<div class="nav"><div class="nav-inner">
+  <div class="nav-tab active" onclick="showPage('geral',this)">📊 Visão Geral</div>
+  <div class="nav-tab" onclick="showPage('equipes',this)">👥 Por Equipe</div>
+  <div class="nav-tab" onclick="showPage('clientes',this)">🏢 Por Cliente</div>
+  <div class="nav-tab" onclick="showPage('operadores',this)">🙍 Por Operador</div>
+</div></div>
+"""
+
+HTML_PAGES = """
+<div id="page-geral" class="page active"><div class="container">
+  <div class="stitle"><span class="dot" style="background:#3fb950"></span>Resumo por Tipo de OS</div>
+  <div class="kpi-grid" id="kpiGrid"></div>
+  <div class="stitle"><span class="dot" style="background:#58a6ff"></span>Status das OS</div>
+  <div class="sbar-wrap"><div class="sbar-labels" id="sbarLabels"></div><div class="sbar" id="sbar"></div></div>
+  <div class="charts-grid">
+    <div class="chart-card"><div class="chart-title">Distribuição por Tipo</div><div class="chart-sub">Proporção de cada motivo</div><div class="chart-wrap"><canvas id="cDonut"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">OS por Cliente</div><div class="chart-sub">Volume total por empresa</div><div class="chart-wrap"><canvas id="cClientes"></canvas></div></div>
+    <div class="chart-card full"><div class="chart-title">Evolução Mensal por Tipo</div><div class="chart-sub">Ordens abertas por mês</div><div class="chart-wrap tall"><canvas id="cMensal"></canvas></div></div>
+  </div>
+  <div class="footer" id="footerGeral"></div>
+</div></div>
+
+<div id="page-equipes" class="page"><div class="container">
+  <div class="stitle"><span class="dot" style="background:#58a6ff"></span>Suporte Técnico</div>
+  <div class="group-header gh-suporte">
+    <div class="gh-icon">🔧</div>
+    <div class="gh-info"><strong>Suporte Técnico</strong><span>Fábio Almeida · Pedro Oliveira · Rebeca Anjos · Vinícius Castro · Marcelo Silva</span></div>
+    <div class="gh-badge" style="color:#58a6ff" id="totalSuporte">—</div>
+  </div>
+  <div class="charts-grid" style="margin-bottom:28px">
+    <div class="chart-card"><div class="chart-title">Tipos — Suporte Técnico</div><div class="chart-sub">Composição por tipo de chamado</div><div class="chart-wrap"><canvas id="cSuporteDonut"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Volume por Operador — Suporte</div><div class="chart-sub">Total de OS por membro</div><div class="chart-wrap"><canvas id="cSuporteBar"></canvas></div></div>
+  </div>
+  <div class="stitle"><span class="dot" style="background:#a371f7"></span>Analista de Rota</div>
+  <div class="group-header gh-rota">
+    <div class="gh-icon">📍</div>
+    <div class="gh-info"><strong>Analista de Rota</strong><span>Beatriz Conte · Cintia Nascimento · Cesar Silva · Wellington Moltine</span></div>
+    <div class="gh-badge" style="color:#a371f7" id="totalRota">—</div>
+  </div>
+  <div class="charts-grid" style="margin-bottom:28px">
+    <div class="chart-card"><div class="chart-title">Tipos — Analista de Rota</div><div class="chart-sub">Composição por tipo de chamado</div><div class="chart-wrap"><canvas id="cRotaDonut"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Volume por Operador — Rota</div><div class="chart-sub">Total de OS por membro</div><div class="chart-wrap"><canvas id="cRotaBar"></canvas></div></div>
+  </div>
+  <div class="stitle"><span class="dot" style="background:#e3b341"></span>Comparativo Suporte × Rota</div>
+  <div class="chart-card full" style="margin-bottom:28px"><div class="chart-title">Tipos de OS: Suporte Técnico vs Analista de Rota</div><div class="chart-sub">Comparação lado a lado</div><div class="chart-wrap tall"><canvas id="cEquipeComp"></canvas></div></div>
+  <div class="footer" id="footerEquipes"></div>
+</div></div>
+
+<div id="page-clientes" class="page"><div class="container">
+  <div class="stitle"><span class="dot" style="background:#e3b341"></span>Resumo por Cliente</div>
+  <div class="client-grid" id="clientCards"></div>
+  <div class="charts-grid">
+    <div class="chart-card full"><div class="chart-title">Tipos de OS por Cliente</div><div class="chart-sub">Composição de chamados por empresa</div><div class="chart-wrap tall"><canvas id="cClienteMotivo"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Status por Cliente</div><div class="chart-sub">Finalizado vs. Aguardando</div><div class="chart-wrap"><canvas id="cClienteStatus"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Operadores por Cliente</div><div class="chart-sub">Quem atende cada cliente</div><div class="chart-wrap"><canvas id="cClienteUser"></canvas></div></div>
+  </div>
+  <div class="footer" id="footerClientes"></div>
+</div></div>
+
+<div id="page-operadores" class="page"><div class="container">
+  <div class="stitle"><span class="dot" style="background:#a371f7"></span>Detalhamento por Operador</div>
+  <div class="table-card">
+    <table><thead><tr>
+      <th>#</th><th>Operador</th><th>Equipe</th><th>Total OS</th>
+      <th>Implantação</th><th>M. Preventiva</th><th>M. Corretiva</th>
+      <th>A. Remoto</th><th>Garantia</th><th>Reversa</th><th>Finalizadas</th><th>Aguardando</th>
+    </tr></thead><tbody id="opTableBody"></tbody></table>
+  </div>
+  <div class="rank-grid">
+    <div class="rank-card"><div class="chart-title" style="margin-bottom:3px">🏆 Ranking Geral</div><div class="chart-sub">Por volume total</div><div id="rankTotal"></div></div>
+    <div class="rank-card"><div class="chart-title" style="margin-bottom:3px">🔧 Manutenção Corretiva</div><div class="chart-sub">Quem mais atendeu</div><div id="rankCorr"></div></div>
+    <div class="rank-card"><div class="chart-title" style="margin-bottom:3px">🛡️ Manutenção Preventiva</div><div class="chart-sub">Quem mais atendeu</div><div id="rankPrev"></div></div>
+    <div class="rank-card"><div class="chart-title" style="margin-bottom:3px">💻 Atendimento Remoto</div><div class="chart-sub">Quem mais atendeu</div><div id="rankRemoto"></div></div>
+  </div>
+  <div class="footer" id="footerOp"></div>
+</div></div>
+"""
+
+HTML_SCRIPT = """
+<script>
+const TEAM = {
+  'FABIO.ALMEIDA':'suporte','PEDRO.OLIVEIRA':'suporte','REBECA.ANJOS':'suporte',
+  'VINICIUS.CASTRO':'suporte','MARCELO.SILVA':'suporte',
+  'BEATRIZ.CONTE':'rota','CINTIA.NASCIMENTO':'rota','CESAR.SSILVA':'rota','WELLINGTON.MOLTINE':'rota',
+  'ANDREA.MELLO':'outros'
+};
+const TEAM_LABEL = {suporte:'Suporte Técnico',rota:'Analista de Rota',outros:'Outros'};
+const CLIENT_COLORS = {AGIBANK:'#3fb950',CREFISA:'#58a6ff',MERCANTIL:'#e3b341','WESTERN UNION':'#ec6cb9',SICOOB:'#39c5cf'};
+const CLIENT_ICONS  = {AGIBANK:'🏦',CREFISA:'💳',MERCANTIL:'🏪','WESTERN UNION':'💱',SICOOB:'🤝'};
+const AV = ['#1f6feb','#da3633','#8957e5','#39c5cf','#d29922','#3fb950','#ec6cb9','#58a6ff','#e3b341','#8b949e'];
+const MOTIVOS = ['IMPLANTAÇÃO DE PROJETO','MANUTENÇÃO PREVENTIVA','MANUTENÇÃO CORRETIVA','ATENDIMENTO REMOTO','GARANTIA','REVERSA'];
+const MLABELS = ['Implantação','M. Preventiva','M. Corretiva','A. Remoto','Garantia','Reversa'];
+const MCOLORS = ['#1f6feb','#d29922','#da3633','#39c5cf','#8957e5','#8b949e'];
+const STATUSES = ['ATENDIMENTO FINALIZADO','AGUARDANDO ATENDIMENTO','EM ATENDIMENTO','EM TRATATIVAS INTERNAS'];
+
+const g = (o,k) => o[k]||0;
+const sn = u => { const p=u.split('.'); return p[0][0].toUpperCase()+p[0].slice(1).toLowerCase()+(p[1]?' '+p[1][0].toUpperCase()+'.':''); };
+const fmt = n => n.toLocaleString('pt-BR');
+const tu = u => MOTIVOS.reduce((s,m)=>s+g(u,m),0);
+const tc = c => MOTIVOS.reduce((s,m)=>s+g(c,m),0);
+
+const umMap={}, usMap={}, cmMap={}, csMap={};
+userMotivoRaw.forEach(r=>umMap[r['Nome (Usuário)']]=r);
+userStatusRaw.forEach(r=>usMap[r['Nome (Usuário)']]=r);
+clientMotivoRaw.forEach(r=>cmMap[r.Cliente]=r);
+clientStatusRaw.forEach(r=>csMap[r.Cliente]=r);
+const allUsers = Object.keys(umMap);
+const allClients = clientMotivoRaw.map(c=>c.Cliente).sort((a,b)=>tc(cmMap[b])-tc(cmMap[a]));
+
+const CO = {responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b949e',font:{size:10},padding:8,boxWidth:8}}}};
+const sc = (s=false) => ({x:{stacked:s,grid:{color:'rgba(48,54,61,.4)'},ticks:{color:'#8b949e',font:{size:10}}},y:{stacked:s,grid:{color:'rgba(48,54,61,.4)'},ticks:{color:'#8b949e',font:{size:10}}}});
+
+function showPage(id,tab){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  tab.classList.add('active');
+}
+
+// Header
+document.getElementById('hTotal').textContent = fmt(TOTAL);
+document.getElementById('hFin').textContent   = fmt(TOTAL_FIN);
+document.getElementById('hAgu').textContent   = fmt(TOTAL_AGU);
+['footerGeral','footerEquipes','footerClientes','footerOp'].forEach(id=>{
+  document.getElementById(id).textContent = 'Gerado automaticamente por gerar_painel.py · '+EMISSAO;
+});
+
+// KPIs
+const kpiDefs=[
+  {l:'Implantação',k:'IMPLANTAÇÃO DE PROJETO',c:'kpi-c1'},
+  {l:'Manut. Preventiva',k:'MANUTENÇÃO PREVENTIVA',c:'kpi-c2'},
+  {l:'Manut. Corretiva',k:'MANUTENÇÃO CORRETIVA',c:'kpi-c3'},
+  {l:'Atend. Remoto',k:'ATENDIMENTO REMOTO',c:'kpi-c4'},
+  {l:'Garantia',k:'GARANTIA',c:'kpi-c5'},
+  {l:'Reversa',k:'REVERSA',c:'kpi-c6'},
+];
+const kg = document.getElementById('kpiGrid');
+kpiDefs.forEach(k=>{
+  const v=userMotivoRaw.reduce((s,u)=>s+g(u,k.k),0);
+  const pct=TOTAL>0?(v/TOTAL*100).toFixed(1):0;
+  kg.innerHTML+=`<div class="kpi-card ${k.c}"><div class="kpi-label">${k.l}</div><div class="kpi-value">${fmt(v)}</div><div class="kpi-sub">${pct}% do total</div></div>`;
+});
+
+// Status bar
+const sdefs=[{l:'Atendimento Finalizado',v:TOTAL_FIN,c:'#3fb950'},{l:'Aguardando Atendimento',v:TOTAL_AGU,c:'#e3b341'}];
+const ov=TOTAL-TOTAL_FIN-TOTAL_AGU; if(ov>0) sdefs.push({l:'Outros',v:ov,c:'#8b949e'});
+const sl=document.getElementById('sbarLabels'), sb=document.getElementById('sbar');
+sdefs.forEach(s=>{
+  const p=(s.v/TOTAL*100).toFixed(1);
+  sl.innerHTML+=`<div class="sbar-label"><span class="sdot" style="background:${s.c}"></span>${s.l}<strong>${fmt(s.v)}</strong></div>`;
+  sb.innerHTML+=`<div class="sseg" style="width:${p}%;background:${s.c}"></div>`;
+});
+
+// Geral charts
+new Chart(document.getElementById('cDonut'),{type:'doughnut',
+  data:{labels:MLABELS,datasets:[{data:MOTIVOS.map(m=>userMotivoRaw.reduce((s,u)=>s+g(u,m),0)),backgroundColor:MCOLORS,borderColor:'#161b22',borderWidth:3}]},
+  options:{...CO,cutout:'65%',plugins:{legend:{position:'bottom',labels:{color:'#8b949e',font:{size:10},padding:10,boxWidth:8}},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed} (${(ctx.parsed/TOTAL*100).toFixed(1)}%)`}}}}
+});
+new Chart(document.getElementById('cClientes'),{type:'bar',
+  data:{labels:allClients,datasets:[{label:'Total OS',data:allClients.map(c=>tc(cmMap[c]||{})),backgroundColor:allClients.map(c=>CLIENT_COLORS[c]||'#8b949e'),borderRadius:6,borderSkipped:false}]},
+  options:{...CO,plugins:{legend:{display:false}},scales:sc()}
+});
+new Chart(document.getElementById('cMensal'),{type:'bar',
+  data:{labels:monthlyRaw.map(m=>m.Mes),datasets:MOTIVOS.map((m,i)=>({label:MLABELS[i],data:monthlyRaw.map(r=>g(r,m)),backgroundColor:MCOLORS[i],stack:'a',borderRadius:i===0?3:0}))},
+  options:{...CO,scales:sc(true),plugins:{legend:{position:'bottom',labels:{color:'#8b949e',font:{size:10},padding:8,boxWidth:8}}}}
+});
+
+// Equipes
+const suporte=allUsers.filter(u=>TEAM[u]==='suporte');
+const rota=allUsers.filter(u=>TEAM[u]==='rota');
+const sumT=users=>MOTIVOS.reduce((acc,m)=>{acc[m]=users.reduce((s,u)=>s+g(umMap[u]||{},m),0);return acc;},{});
+const sD=sumT(suporte), rD=sumT(rota);
+const tsup=suporte.reduce((s,u)=>s+tu(umMap[u]||{}),0);
+const trot=rota.reduce((s,u)=>s+tu(umMap[u]||{}),0);
+document.getElementById('totalSuporte').textContent=fmt(tsup)+' OS';
+document.getElementById('totalRota').textContent=fmt(trot)+' OS';
+
+const mkDonut=(id,data)=>new Chart(document.getElementById(id),{type:'doughnut',
+  data:{labels:MLABELS,datasets:[{data:MOTIVOS.map(m=>data[m]||0),backgroundColor:MCOLORS,borderColor:'#161b22',borderWidth:2}]},
+  options:{...CO,cutout:'60%',plugins:{legend:{position:'right',labels:{color:'#8b949e',font:{size:10},padding:8,boxWidth:8}}}}
+});
+mkDonut('cSuporteDonut',sD); mkDonut('cRotaDonut',rD);
+
+const mkBar=(id,users,col)=>{
+  const s=[...users].sort((a,b)=>tu(umMap[b]||{})-tu(umMap[a]||{}));
+  new Chart(document.getElementById(id),{type:'bar',
+    data:{labels:s.map(u=>sn(u)),datasets:[{label:'Total OS',data:s.map(u=>tu(umMap[u]||{})),backgroundColor:col,borderRadius:6,borderSkipped:false}]},
+    options:{...CO,plugins:{legend:{display:false}},scales:sc()}
+  });
+};
+mkBar('cSuporteBar',suporte,'#58a6ff'); mkBar('cRotaBar',rota,'#a371f7');
+new Chart(document.getElementById('cEquipeComp'),{type:'bar',
+  data:{labels:MLABELS,datasets:[
+    {label:'Suporte Técnico',data:MOTIVOS.map(m=>sD[m]||0),backgroundColor:'#1f6feb',borderRadius:5},
+    {label:'Analista de Rota',data:MOTIVOS.map(m=>rD[m]||0),backgroundColor:'#8957e5',borderRadius:5},
+  ]},
+  options:{...CO,scales:sc(),plugins:{legend:{position:'bottom',labels:{color:'#8b949e',font:{size:11},padding:12,boxWidth:10}}}}
+});
+
+// Client cards
+const ccEl=document.getElementById('clientCards');
+allClients.forEach(name=>{
+  const cm=cmMap[name]||{}, cs=csMap[name]||{};
+  const t=tc(cm), fin=g(cs,'ATENDIMENTO FINALIZADO'), agu=g(cs,'AGUARDANDO ATENDIMENTO');
+  const clr=CLIENT_COLORS[name]||'#8b949e', icon=CLIENT_ICONS[name]||'🏢';
+  const pct=(t/TOTAL*100).toFixed(1), finPct=t?Math.round(fin/t*100):0;
+  const types=MOTIVOS.map((m,i)=>({l:MLABELS[i],v:cm[m]||0,c:MCOLORS[i]})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v).slice(0,3);
+  ccEl.innerHTML+=`<div class="client-card" style="border-color:${clr}33">
+    <div class="client-logo">${icon}</div><div class="client-name">${name}</div>
+    <div class="client-total" style="color:${clr}">${fmt(t)}</div>
+    <div style="font-size:10px;color:var(--text2);margin-bottom:8px">${pct}% do total · ${finPct}% finalizadas</div>
+    <div style="height:4px;border-radius:4px;background:${clr}22;margin-bottom:8px"><div style="height:4px;width:${Math.min(pct*3,100)}%;background:${clr};border-radius:4px"></div></div>
+    <div class="client-tags">
+      ${types.map(x=>`<span class="ctag" style="background:${x.c}18;color:${x.c}">${x.l} ${x.v}</span>`).join('')}
+      <span class="ctag" style="background:#3fb95018;color:#3fb950">✓ ${fmt(fin)}</span>
+      ${agu>0?`<span class="ctag" style="background:#e3b34118;color:#e3b341">⏳ ${agu}</span>`:''}
+    </div>
+  </div>`;
+});
+new Chart(document.getElementById('cClienteMotivo'),{type:'bar',
+  data:{labels:allClients,datasets:MOTIVOS.map((m,i)=>({label:MLABELS[i],data:allClients.map(c=>g(cmMap[c]||{},m)),backgroundColor:MCOLORS[i],stack:'a',borderRadius:i===0?3:0}))},
+  options:{...CO,scales:sc(true),plugins:{legend:{position:'bottom',labels:{color:'#8b949e',font:{size:10},padding:8,boxWidth:8}}}}
+});
+new Chart(document.getElementById('cClienteStatus'),{type:'bar',
+  data:{labels:allClients,datasets:[
+    {label:'Finalizado',data:allClients.map(c=>g(csMap[c]||{},'ATENDIMENTO FINALIZADO')),backgroundColor:'#3fb950',borderRadius:4,stack:'a'},
+    {label:'Aguardando',data:allClients.map(c=>g(csMap[c]||{},'AGUARDANDO ATENDIMENTO')),backgroundColor:'#e3b341',stack:'a'},
+    {label:'Em Atend.',data:allClients.map(c=>g(csMap[c]||{},'EM ATENDIMENTO')),backgroundColor:'#58a6ff',stack:'a'},
+  ]},
+  options:{...CO,scales:sc(true),plugins:{legend:{position:'bottom',labels:{color:'#8b949e',font:{size:10},padding:8,boxWidth:8}}}}
+});
+const actU=allUsers.filter(u=>tu(umMap[u]||{})>0);
+new Chart(document.getElementById('cClienteUser'),{type:'bar',
+  data:{labels:allClients,datasets:actU.map((u,i)=>({label:sn(u),data:allClients.map(c=>{const r=clientUserRaw.find(x=>x.Cliente===c);return r?(r[u]||0):0;}),backgroundColor:AV[i%AV.length],borderRadius:2,stack:'a'}))},
+  options:{...CO,scales:sc(true),plugins:{legend:{position:'bottom',labels:{color:'#8b949e',font:{size:9},padding:5,boxWidth:8}}}}
+});
+
+// Tabela operadores
+const ranked=[...allUsers].sort((a,b)=>tu(umMap[b]||{})-tu(umMap[a]||{}));
+const maxT=Math.max(...ranked.map(u=>tu(umMap[u]||{})));
+const tbody=document.getElementById('opTableBody');
+const mBar=(v,max,c)=>v>0?`<div class="mini-bar-wrap"><div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.round(v/max*100)}%;background:${c}"></div></div><span class="mval" style="color:${c}">${v}</span></div>`:`<span style="color:var(--border)">—</span>`;
+ranked.forEach((u,i)=>{
+  const um=umMap[u]||{}, us=usMap[u]||{};
+  const t=tu(um), fin=g(us,'ATENDIMENTO FINALIZADO'), agu=g(us,'AGUARDANDO ATENDIMENTO');
+  const team=TEAM[u]||'outros', clr=AV[i%AV.length];
+  const ini=u.split('.').map(p=>p[0]).join('').slice(0,2).toUpperCase();
+  const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1;
+  const fp=t?Math.round(fin/t*100):0;
+  tbody.innerHTML+=`<tr>
+    <td><span style="font-size:12px;font-weight:700;color:var(--text2)">${medal}</span></td>
+    <td><span class="avatar" style="background:${clr}22;color:${clr};border:1px solid ${clr}44">${ini}</span><span class="uname">${sn(u)}</span></td>
+    <td><span class="team-${team}">${TEAM_LABEL[team]}</span></td>
+    <td><div class="mini-bar-wrap"><div class="mini-bar" style="max-width:70px"><div class="mini-bar-fill" style="width:${Math.round(t/maxT*100)}%;background:${clr}"></div></div><span class="mval" style="color:${clr};font-size:14px;font-weight:800">${t}</span></div></td>
+    <td>${mBar(g(um,'IMPLANTAÇÃO DE PROJETO'),maxT,'#1f6feb')}</td>
+    <td>${mBar(g(um,'MANUTENÇÃO PREVENTIVA'),maxT,'#d29922')}</td>
+    <td>${mBar(g(um,'MANUTENÇÃO CORRETIVA'),maxT,'#da3633')}</td>
+    <td>${mBar(g(um,'ATENDIMENTO REMOTO'),maxT,'#39c5cf')}</td>
+    <td>${mBar(g(um,'GARANTIA'),maxT,'#8957e5')}</td>
+    <td>${mBar(g(um,'REVERSA'),maxT,'#8b949e')}</td>
+    <td><span style="color:#3fb950;font-weight:600">${fin} <small style="color:var(--text2)">(${fp}%)</small></span></td>
+    <td>${agu>0?`<span style="color:#e3b341;font-weight:600">${agu}</span>`:'<span style="color:var(--border)">—</span>'}</td>
+  </tr>`;
+});
+
+// Rankings
+function bRank(id,items,col){
+  const max=Math.max(...items.map(x=>x.v));
+  const el=document.getElementById(id);
+  items.forEach((d,i)=>{
+    const p=max>0?Math.round(d.v/max*100):0;
+    el.innerHTML+=`<div class="rank-item">
+      <div class="rnum ${i<3?'top':''}">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+      <div class="rbar-wrap"><div class="rname">${sn(d.n)} <span style="font-size:9px;color:var(--text2)">· ${TEAM_LABEL[TEAM[d.n]||'outros']}</span></div><div class="rbar"><div class="rbar-fill" style="width:${p}%;background:${col}"></div></div></div>
+      <div class="rcount" style="color:${col}">${d.v}</div>
+    </div>`;
+  });
+}
+bRank('rankTotal',ranked.filter(u=>tu(umMap[u]||{})>0).map(u=>({n:u,v:tu(umMap[u]||{})})),'#3fb950');
+const sb2=(key)=>[...allUsers].sort((a,b)=>g(umMap[b]||{},key)-g(umMap[a]||{},key)).filter(u=>g(umMap[u]||{},key)>0).map(u=>({n:u,v:g(umMap[u]||{},key)}));
+bRank('rankCorr',  sb2('MANUTENÇÃO CORRETIVA'),  '#da3633');
+bRank('rankPrev',  sb2('MANUTENÇÃO PREVENTIVA'), '#d29922');
+bRank('rankRemoto',sb2('ATENDIMENTO REMOTO'),    '#39c5cf');
+</script></body></html>
+"""
+
+html = HTML_HEADER + HTML_PAGES + "<script>" + JS_DATA + "</script>" + HTML_SCRIPT
+
+with open(SAIDA, 'w', encoding='utf-8') as f:
+    f.write(html)
+
+print(f"✅ Painel gerado: {SAIDA}")
+print(f"   Total de OS : {total_registros:,}")
+print(f"   Finalizadas : {total_fin:,}")
+print(f"   Aguardando  : {total_agu:,}")
+print(f"   Período     : {periodo}")
+print(f"   Clientes    : {', '.join(sorted(df['Cliente'].unique()))}")
+print(f"\n📂 Abra o arquivo '{SAIDA}' no navegador.")

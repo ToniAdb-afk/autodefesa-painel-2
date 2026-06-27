@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autodefesa Brasil — Central de Painéis</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+:root{--bg:#080b10;--bg2:#0e1420;--bg3:#141c2e;--border:#1e2d4a;--text:#e8edf5;--text2:#7a8ba8;--text3:#4a5f7a;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+.header{background:linear-gradient(180deg,#0a0f1a,#080b10);border-bottom:1px solid #c0392b44;padding:0 40px;}
+.header-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:16px;height:70px;}
+.logo-text strong{font-size:15px;font-weight:800;letter-spacing:1.5px;}
+.logo-text span{font-size:10px;color:var(--text2);letter-spacing:2px;text-transform:uppercase;display:block;margin-top:3px;}
+.main{flex:1;display:flex;align-items:center;justify-content:center;padding:60px 40px;}
+.hub{max-width:760px;width:100%;text-align:center;}
+.hub-title{font-size:32px;font-weight:900;letter-spacing:-1px;margin-bottom:10px;}
+.hub-title span{color:#e74c3c;}
+.hub-sub{font-size:14px;color:var(--text2);margin-bottom:48px;}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:40px;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:36px 28px;text-align:left;text-decoration:none;color:var(--text);transition:transform .2s,border-color .2s,box-shadow .2s;position:relative;overflow:hidden;}
+.card:hover{transform:translateY(-4px);box-shadow:0 20px 40px rgba(0,0,0,.4);}
+.card.red:hover{border-color:#e74c3c55;}
+.card.blue:hover{border-color:#3498db55;}
+.card-glow{position:absolute;top:-40px;right:-40px;width:140px;height:140px;border-radius:50%;opacity:.06;filter:blur(30px);}
+.card.red .card-glow{background:#e74c3c;}
+.card.blue .card-glow{background:#3498db;}
+.card-icon{font-size:36px;margin-bottom:16px;}
+.card-title{font-size:18px;font-weight:800;margin-bottom:6px;}
+.card.red .card-title{color:#e74c3c;}
+.card.blue .card-title{color:#3498db;}
+.card-desc{font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:20px;}
+.card-tags{display:flex;flex-wrap:wrap;gap:6px;}
+.tag{font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px;}
+.card.red .tag{background:rgba(231,76,60,.12);color:#e74c3c;border:1px solid rgba(231,76,60,.25);}
+.card.blue .tag{background:rgba(52,152,219,.12);color:#3498db;border:1px solid rgba(52,152,219,.25);}
+.card-arrow{position:absolute;bottom:28px;right:28px;font-size:20px;opacity:.3;transition:opacity .2s,transform .2s;}
+.card:hover .card-arrow{opacity:1;transform:translateX(4px);}
+.footer{text-align:center;padding:20px;color:var(--text3);font-size:11px;border-top:1px solid var(--border);}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#2ecc71;animation:pulse 2s infinite;margin-right:5px;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</head>
+<body>
+<div class="header"><div class="header-inner">
+  <div class="logo-text"><strong>🛡️ AUTODEFESA BRASIL</strong><span>Gestão &amp; Tecnologia em Segurança</span></div>
+</div></div>
+
+<div class="main"><div class="hub">
+  <div class="hub-title">Central de <span>Painéis</span></div>
+  <div class="hub-sub"><span class="live-dot"></span>Atualizado automaticamente via GitHub Actions</div>
+
+  <div class="cards">
+    <a href="painel_os.html" class="card red">
+      <div class="card-glow"></div>
+      <div class="card-icon">📋</div>
+      <div class="card-title">Painel de OS</div>
+      <div class="card-desc">Ordens de Serviço por operador, equipe, cliente e tipo. Manutenção corretiva, preventiva, implantação e atendimento remoto.</div>
+      <div class="card-tags">
+        <span class="tag">Suporte Técnico</span>
+        <span class="tag">Analista de Rota</span>
+        <span class="tag">Por Cliente</span>
+        <span class="tag">Rankings</span>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+
+    <a href="painel_pagamentos.html" class="card blue">
+      <div class="card-glow"></div>
+      <div class="card-icon">💰</div>
+      <div class="card-title">Painel Financeiro</div>
+      <div class="card-desc">Pagamentos Sankhya por solicitante, natureza, parceiro e vencimento. Volume total, status de liberação e cronograma.</div>
+      <div class="card-tags">
+        <span class="tag">Volume R$ 13,3M</span>
+        <span class="tag">Solicitantes</span>
+        <span class="tag">Parceiros</span>
+        <span class="tag">Vencimentos</span>
+      </div>
+      <div class="card-arrow">→</div>
+    </a>
+  </div>
+</div></div>
+
+<div class="footer">Autodefesa Brasil · Painéis atualizados automaticamente · <span id="dt"></span></div>
+<script>document.getElementById('dt').textContent=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});</script>
+</body>
+</html>
