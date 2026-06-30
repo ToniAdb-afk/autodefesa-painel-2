@@ -71,6 +71,7 @@ jobs:
           git add -f index.html hub.html
           [ -f painel_os.html ] && git add -f painel_os.html
           [ -f painel_pagamentos.html ] && git add -f painel_pagamentos.html
+          git restore --staged .github/workflows/gerar_paineis.yml 2>/dev/null || true
           git diff --staged --quiet && echo "Nada a commitar" && exit 0
           git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
           git push --force-with-lease origin main
