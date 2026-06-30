@@ -46,7 +46,7 @@ jobs:
 
       - name: Gerar Painel Financeiro
         run: |
-          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "SANKHYA\|PAGAMENTO" | head -1)
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -iE "SANKHYA|PAGAMENTO" | head -1)
           if [ -n "$ARQUIVO" ]; then
             echo "✅ Gerando Painel Financeiro com: $ARQUIVO"
             LOGO=$(find . -maxdepth 1 -name "*.webp" | head -1)
@@ -71,4 +71,5 @@ jobs:
           [ -f painel_os.html ] && git add -f painel_os.html
           [ -f painel_pagamentos.html ] && git add -f painel_pagamentos.html
           git diff --staged --quiet || git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
+          git pull --rebase origin main
           git push
