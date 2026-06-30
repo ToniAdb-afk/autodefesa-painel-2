@@ -40,7 +40,7 @@ jobs:
           if [ -n "$ARQUIVO" ]; then
             echo "✅ Gerando Painel OS com: $ARQUIVO"
             python gerar_painel.py "$ARQUIVO"
-            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html && echo "✅ painel_os.html criado"
+            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html
           else
             echo "⚠️ Nenhum arquivo painel_de_OSS encontrado"
           fi
@@ -56,7 +56,7 @@ jobs:
             else
               python gerar_painel_pagamentos.py "$ARQUIVO"
             fi
-            [ -f index.html ] && mv index.html painel_pagamentos.html && echo "✅ painel_pagamentos.html criado"
+            [ -f index.html ] && mv index.html painel_pagamentos.html
           else
             echo "⚠️ Nenhum arquivo SANKHYA/PAGAMENTO encontrado"
           fi
@@ -64,7 +64,7 @@ jobs:
       - name: Restaurar hub de entrada
         run: cp hub_index.html index.html
 
-   - name: Commit e Push dos painéis
+      - name: Commit e Push dos painéis
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
