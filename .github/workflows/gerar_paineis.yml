@@ -68,7 +68,7 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add -f index.html
+          git add -f index.html hub.html
           [ -f painel_os.html ] && git add -f painel_os.html
           [ -f painel_pagamentos.html ] && git add -f painel_pagamentos.html
           git diff --staged --quiet && echo "Nada a commitar" && exit 0
