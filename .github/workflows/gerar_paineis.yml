@@ -73,6 +73,4 @@ jobs:
           [ -f painel_pagamentos.html ] && git add -f painel_pagamentos.html
           git diff --staged --quiet && echo "Nada a commitar" && exit 0
           git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
-          git fetch origin main
-          git rebase origin/main
-          git push origin main
+          git push --force-with-lease origin main
