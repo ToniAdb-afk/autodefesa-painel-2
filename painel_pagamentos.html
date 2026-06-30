@@ -81,7 +81,7 @@ td{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:mi
   <div class="header-divider"></div>
   <div class="header-title">Painel de Pagamentos — Sankhya</div>
   <div class="header-spacer"></div>
-  <div class="header-meta"><span class="live-dot"></span>Emissão: <strong>27/06/2026 18:21</strong><br>Período: Jan/2026 – Jun/2026</div>
+  <div class="header-meta"><span class="live-dot"></span>Emissão: <strong>30/06/2026 21:42</strong><br>Período: Jan/2026 – Jun/2026</div>
 </div></div>
 
 <div class="nav"><div class="nav-inner">
@@ -114,7 +114,7 @@ td{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:mi
     <div class="chart-card"><div class="chart-title">Liberadas vs. Aguardando</div><div class="chart-sub">Status por mês</div><div class="chart-wrap h280"><canvas id="cStatusMensal"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Distribuição por Área</div><div class="chart-sub">Centro de resultado — valor total</div><div class="chart-wrap h280"><canvas id="cAreas"></canvas></div></div>
   </div>
-  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 27/06/2026 18:21 · 5,833 registros</div>
+  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 30/06/2026 21:42 · 5,833 registros</div>
 </div></div>
 
 <div id="page-solicitantes" class="page"><div class="container">
@@ -126,7 +126,7 @@ td{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:mi
   </div>
   <div class="stitle"><span class="stitle-bar" style="background:#f39c12"></span>Detalhamento</div>
   <div class="table-card"><table><thead><tr><th>#</th><th>Solicitante</th><th>Qtd.</th><th>Valor Total</th><th>Liberado</th><th>Aguardando</th><th>% Lib.</th></tr></thead><tbody id="solTableBody"></tbody></table></div>
-  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 27/06/2026 18:21</div>
+  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 30/06/2026 21:42</div>
 </div></div>
 
 <div id="page-natureza" class="page"><div class="container">
@@ -140,7 +140,7 @@ td{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:mi
     <div class="chart-card"><div class="chart-title">Volume por Tipo de Operação</div><div class="chart-sub">Valor e quantidade</div><div class="chart-wrap h280"><canvas id="cTipoBar"></canvas></div></div>
     <div class="chart-card"><div class="chart-title">Top 15 Cidades</div><div class="chart-sub">Maior volume negociado</div><div class="chart-wrap h280"><canvas id="cCidades"></canvas></div></div>
   </div>
-  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 27/06/2026 18:21</div>
+  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 30/06/2026 21:42</div>
 </div></div>
 
 <div id="page-parceiros" class="page"><div class="container">
@@ -150,7 +150,7 @@ td{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:mi
   </div>
   <div class="stitle"><span class="stitle-bar" style="background:#f39c12"></span>Detalhamento</div>
   <div class="table-card"><table><thead><tr><th>#</th><th>Parceiro</th><th>Qtd.</th><th>Valor Total</th><th>Participação</th></tr></thead><tbody id="parcTableBody"></tbody></table></div>
-  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 27/06/2026 18:21</div>
+  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 30/06/2026 21:42</div>
 </div></div>
 
 <div id="page-vencimentos" class="page"><div class="container">
@@ -158,18 +158,18 @@ td{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:mi
   <div class="venc-grid" id="vencCards"></div>
   <div id="noVenc" class="no-venc" style="display:none">✅ Nenhum vencimento nos próximos 60 dias.</div>
   <div class="chart-card" style="margin-bottom:24px"><div class="chart-title">Cronograma de Vencimentos</div><div class="chart-sub">Valor a vencer por data</div><div class="chart-wrap h280"><canvas id="cVenc"></canvas></div></div>
-  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 27/06/2026 18:21</div>
+  <div class="footer">Autodefesa Brasil — Painel Sankhya · Gerado em 30/06/2026 21:42</div>
 </div></div>
 
 <script>
 
-const EMISSAO="27/06/2026 18:21";
+const EMISSAO="30/06/2026 21:42";
 const PERIODO="Jan/2026 – Jun/2026";
 const TOTAL=5833;
 const TOTAL_VALOR=13275502.62;
 const TOTAL_FIN=5572;
 const TOTAL_AGU=260;
-const TOTAL_VENC=1076714.55;
+const TOTAL_VENC=782235.75;
 const MONTHLY=[{"mes": "Jan", "valor": 808491.34}, {"mes": "Fev", "valor": 870007.53}, {"mes": "Mar", "valor": 656241.98}, {"mes": "Abr", "valor": 598617.55}, {"mes": "Mai", "valor": 1352708.63}, {"mes": "Jun", "valor": 2351684.28}];
 const MONTHLY_STATUS=[{"mes": "Jan", "L": 808491.34, "A": 0.0}, {"mes": "Fev", "L": 870007.53, "A": 0.0}, {"mes": "Mar", "L": 655797.76, "A": 444.22}, {"mes": "Abr", "L": 598617.55, "A": 0.0}, {"mes": "Mai", "L": 1344972.76, "A": 7735.87}, {"mes": "Jun", "L": 2106125.03, "A": 245559.25}];
 const SOLICITANTES=[{"nome": "VICTOR.FONSECA", "valor": 2364614.27, "qtd": 2307}, {"nome": "MATHEUS.CARDOSO", "valor": 1383107.3, "qtd": 746}, {"nome": "ALINE.LEITE", "valor": 1330585.7, "qtd": 738}, {"nome": "GABRIEL.JUNIO", "valor": 398144.02, "qtd": 261}, {"nome": "CINTIA.NASCIMENTO", "valor": 296760.57, "qtd": 691}, {"nome": "BEATRIZ.CONTE", "valor": 201090.44, "qtd": 459}, {"nome": "KARINA.VELLARDI", "valor": 198030.58, "qtd": 224}, {"nome": "VINICIUS.CARVALHO", "valor": 173450.6, "qtd": 50}, {"nome": "MARIANA.SILVA", "valor": 59851.83, "qtd": 122}, {"nome": "MATHEUS.BERNARDO", "valor": 47749.2, "qtd": 25}, {"nome": "DIMITRIUS.SANTOS", "valor": 41702.9, "qtd": 22}, {"nome": "JOSIANE.SOUSA", "valor": 20050.0, "qtd": 7}, {"nome": "KELI.JESUS", "valor": 18367.05, "qtd": 1}, {"nome": "CESAR.SSILVA", "valor": 16862.68, "qtd": 43}, {"nome": "ANDREA.MELLO", "valor": 15128.3, "qtd": 55}];
@@ -181,7 +181,7 @@ const TIPO_OP=[{"t": "PEDIDO DE COMPRA - SERVIÇO DIVERSOS", "v": 2556290.62, "q
 const CIDADES=[{"c": "Sao Paulo", "v": 549477.2, "q": 632}, {"c": "FORTALEZA", "v": 442096.99, "q": 270}, {"c": "OSASCO", "v": 389559.1, "q": 252}, {"c": "NOVA IGUACU", "v": 302148.22, "q": 318}, {"c": "GRAVATAI", "v": 285432.62, "q": 253}, {"c": "BELEM", "v": 257511.35, "q": 188}, {"c": "SALVADOR", "v": 245368.69, "q": 238}, {"c": "ITAPECERICA DA SERRA", "v": 218846.64, "q": 187}, {"c": "Campinas", "v": 212717.72, "q": 248}, {"c": "ABADIA DE GOIAS", "v": 189816.87, "q": 142}, {"c": "RIO CLARO", "v": 185091.72, "q": 143}, {"c": "RIO DE JANEIRO", "v": 184213.66, "q": 188}, {"c": "PRESIDENTE PRUDENTE", "v": 145122.47, "q": 93}, {"c": "IBIRITE", "v": 141855.53, "q": 61}, {"c": "DRACENA", "v": 139991.64, "q": 91}];
 const PARCEIROS=[{"p": "NMV TECNOLOGIA E SERVICOS PARA SISTEMA DE AUTODEFESA", "v": 406686.03, "q": 229}, {"p": "ZILMA CASTELO DE SOUZA", "v": 352799.0, "q": 226}, {"p": "CIRCUIT SOLUCOES EM TECNOLOGIA", "v": 255111.35, "q": 186}, {"p": "MARIA CRISTINA BENCICE DA SILVA", "v": 218938.23, "q": 357}, {"p": "LUCAS JUNIO DA SILVA", "v": 218846.64, "q": 187}, {"p": "LUIS FELIPE INACIO ZUCATELLI", "v": 208635.69, "q": 169}, {"p": "E S E SEGURANCA ELETRONICA", "v": 192985.37, "q": 189}, {"p": "ALINE VITORINO RAIUMUNDO -", "v": 189816.87, "q": 142}, {"p": "MARCIO DE GODOY GERMANO", "v": 188412.76, "q": 149}, {"p": "BRUNO FELIPE CLARO NOVAIOR CPF 094.563.469-27", "v": 185091.72, "q": 143}];
 const AREAS=[{"a": "ADMINISTRATIVO ESCRITORIO SP", "v": 18367.05, "q": 1}, {"a": "AREA 01", "v": 197407.36, "q": 58}, {"a": "AREA 03", "v": 6376733.43, "q": 5736}, {"a": "AREA 04", "v": 21577.1, "q": 11}, {"a": "AREA 05", "v": 23666.37, "q": 26}];
-const VENCIMENTOS=[{"d": "2026-06-29", "v": 294478.8}, {"d": "2026-06-30", "v": 165550.41}, {"d": "2026-07-01", "v": 67056.0}, {"d": "2026-07-02", "v": 132872.25}, {"d": "2026-07-03", "v": 31875.7}, {"d": "2026-07-06", "v": 338310.09}, {"d": "2026-07-07", "v": 46255.1}, {"d": "2026-07-08", "v": 316.2}];
+const VENCIMENTOS=[{"d": "2026-06-30", "v": 165550.41}, {"d": "2026-07-01", "v": 67056.0}, {"d": "2026-07-02", "v": 132872.25}, {"d": "2026-07-03", "v": 31875.7}, {"d": "2026-07-06", "v": 338310.09}, {"d": "2026-07-07", "v": 46255.1}, {"d": "2026-07-08", "v": 316.2}];
 
 const fmt=v=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtK=v=>v>=1e6?'R$ '+(v/1e6).toFixed(2).replace('.',',')+'M':v>=1e3?'R$ '+(v/1e3).toFixed(1).replace('.',',')+'K':fmt(v);
