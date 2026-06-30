@@ -19,6 +19,17 @@ if not os.path.exists(ARQUIVO):
 
 print(f"📂 Lendo {ARQUIVO}...")
 
+# ── Validação: verifica se é realmente a planilha financeira ──────────
+try:
+    df_check = pd.read_excel(ARQUIVO, header=2, nrows=2)
+    if 'Dt. Negociação' not in df_check.columns and 'Valor Nota/Financ.' not in df_check.columns:
+        print(f"⚠️  Arquivo '{ARQUIVO}' não parece ser a planilha financeira (colunas não encontradas).")
+        print(f"   Pulando geração do painel financeiro.")
+        sys.exit(0)
+except Exception as e:
+    print(f"⚠️  Erro ao verificar arquivo: {e}")
+    sys.exit(0)
+
 # ── Logo base64 ───────────────────────────────────────────────────────
 logo_b64 = ""
 if os.path.exists(LOGO):
