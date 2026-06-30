@@ -35,21 +35,18 @@ jobs:
 
       - name: Gerar Painel de OS
         run: |
-          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -iE "OSS|painel.de.OS|painel_de_OS" | head -1)
-          if [ -z "$ARQUIVO" ]; then
-            ARQUIVO=$(find dados/ -name "*.xlsx" | grep -iv "BASE\|SANKHYA\|PAGAMENTO" | head -1)
-          fi
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "painel_de_OSS" | head -1)
           if [ -n "$ARQUIVO" ]; then
             echo "✅ Gerando Painel OS com: $ARQUIVO"
             python gerar_painel.py "$ARQUIVO"
             [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html && echo "✅ painel_os.html criado"
           else
-            echo "⚠️ Nenhum arquivo de OS encontrado"
+            echo "⚠️ Nenhum arquivo painel_de_OSS encontrado"
           fi
 
       - name: Gerar Painel Financeiro
         run: |
-          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -iE "BASE|SANKHYA|PAGAMENTO" | head -1)
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "SANKHYA\|PAGAMENTO" | head -1)
           if [ -n "$ARQUIVO" ]; then
             echo "✅ Gerando Painel Financeiro com: $ARQUIVO"
             LOGO=$(find . -maxdepth 1 -name "*.webp" | head -1)
@@ -60,7 +57,7 @@ jobs:
             fi
             [ -f index.html ] && mv index.html painel_pagamentos.html && echo "✅ painel_pagamentos.html criado"
           else
-            echo "⚠️ Nenhum arquivo financeiro encontrado"
+            echo "⚠️ Nenhum arquivo SANKHYA/PAGAMENTO encontrado"
           fi
 
       - name: Restaurar hub de entrada
