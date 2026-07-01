@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  workflows: write
 
 jobs:
   build:
@@ -84,13 +83,16 @@ jobs:
         run: cp hub_index.html index.html
 
       - name: Commit e Push dos painéis
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
           git add -f index.html
           [ -f painel_os.html ]          && git add -f painel_os.html
           [ -f painel_pagamentos.html ]  && git add -f painel_pagamentos.html
           [ -f painel_faturamento.html ] && git add -f painel_faturamento.html
           git diff --staged --quiet && echo "Nada a commitar" && exit 0
           git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
-          git push origin HEAD:main --force-with-lease
+          git push origin HEAD:main
