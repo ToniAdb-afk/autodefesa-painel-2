@@ -40,7 +40,7 @@ jobs:
           if [ -n "$ARQUIVO" ]; then
             echo "✅ Gerando Painel OS com: $ARQUIVO"
             python gerar_painel.py "$ARQUIVO"
-            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html && echo "✅ painel_os.html criado"
+            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html
           else
             echo "⚠️ Nenhum arquivo painel_de_OSS encontrado"
           fi
@@ -56,7 +56,7 @@ jobs:
             else
               python gerar_painel_pagamentos.py "$ARQUIVO"
             fi
-            [ -f index.html ] && mv index.html painel_pagamentos.html && echo "✅ painel_pagamentos.html criado"
+            [ -f index.html ] && mv index.html painel_pagamentos.html
           else
             echo "⚠️ Nenhum arquivo SANKHYA/PAGAMENTO encontrado"
           fi
@@ -68,9 +68,8 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add -f index.html
-          [ -f painel_os.html ] && git add -f painel_os.html
-          [ -f painel_pagamentos.html ] && git add -f painel_pagamentos.html
+          git checkout -- .github/workflows/gerar_paineis.yml
+          git add index.html hub.html painel_os.html painel_pagamentos.html 2>/dev/null || true
           git diff --staged --quiet && echo "Nada a commitar" && exit 0
-          git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
-          git push --force-with-lease origin main
+          git commit -m "Paineis atualizados"
+          git push --force origin main
