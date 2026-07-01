@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  workflows: write
 
 jobs:
   build:
@@ -36,13 +37,14 @@ jobs:
 
       - name: Gerar Painel de OS
         run: |
-          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "painel_de_OSS" | head -1)
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -i "OSS\|painel" | head -1)
           if [ -n "$ARQUIVO" ]; then
             echo "✅ Gerando Painel OS com: $ARQUIVO"
             python gerar_painel.py "$ARQUIVO"
-            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html
+            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html && echo "✅ painel_os.html criado"
+            [ -f painel_os.html ] && echo "✅ painel_os.html criado"
           else
-            echo "⚠️ Nenhum arquivo painel_de_OSS encontrado"
+            echo "⚠️ Nenhum arquivo de OS encontrado em dados/"
           fi
 
       - name: Gerar Painel Financeiro
@@ -56,9 +58,26 @@ jobs:
             else
               python gerar_painel_pagamentos.py "$ARQUIVO"
             fi
-            [ -f index.html ] && mv index.html painel_pagamentos.html
+            [ -f index.html ] && mv index.html painel_pagamentos.html && echo "✅ painel_pagamentos.html criado"
+            [ -f painel_pagamentos.html ] && echo "✅ painel_pagamentos.html criado"
           else
-            echo "⚠️ Nenhum arquivo SANKHYA/PAGAMENTO encontrado"
+            echo "⚠️ Nenhum arquivo SANKHYA/PAGAMENTO encontrado em dados/"
+          fi
+
+      - name: Gerar Painel de Faturamento
+        run: |
+          ARQUIVO=$(find dados/ -name "*.xlsx" | grep -iE "FATURAMENTO" | head -1)
+          if [ -n "$ARQUIVO" ]; then
+            echo "✅ Gerando Painel de Faturamento com: $ARQUIVO"
+            LOGO=$(find . -maxdepth 1 -name "*.webp" | head -1)
+            if [ -n "$LOGO" ]; then
+              python gerar_painel_faturamento.py "$ARQUIVO" "$LOGO"
+            else
+              python gerar_painel_faturamento.py "$ARQUIVO"
+            fi
+            [ -f painel_faturamento.html ] && echo "✅ painel_faturamento.html criado"
+          else
+            echo "⚠️ Nenhum arquivo de FATURAMENTO encontrado em dados/"
           fi
 
       - name: Restaurar hub de entrada
@@ -68,8 +87,12 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git checkout -- .github/workflows/gerar_paineis.yml
-          git add index.html hub.html painel_os.html painel_pagamentos.html 2>/dev/null || true
+          git add -f index.html
+          [ -f painel_os.html ]          && git add -f painel_os.html
+          [ -f painel_pagamentos.html ]  && git add -f painel_pagamentos.html
+          [ -f painel_faturamento.html ] && git add -f painel_faturamento.html
+          git restore --staged .github/ 2>/dev/null || true
           git diff --staged --quiet && echo "Nada a commitar" && exit 0
-          git commit -m "Paineis atualizados"
-          git push --force origin main
+          git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
+          git pull --rebase origin main
+          git push origin main
