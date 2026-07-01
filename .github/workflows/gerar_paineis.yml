@@ -18,7 +18,7 @@ jobs:
       - name: Checkout do repositório
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
       - name: Instalar Python
@@ -41,7 +41,7 @@ jobs:
           if [ -n "$ARQUIVO" ]; then
             echo "✅ Gerando Painel OS com: $ARQUIVO"
             python gerar_painel.py "$ARQUIVO"
-            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html && echo "✅ painel_os.html criado"
+            [ -f painel_OSS.html ] && mv painel_OSS.html painel_os.html
             [ -f painel_os.html ] && echo "✅ painel_os.html criado"
           else
             echo "⚠️ Nenhum arquivo de OS encontrado em dados/"
@@ -58,7 +58,7 @@ jobs:
             else
               python gerar_painel_pagamentos.py "$ARQUIVO"
             fi
-            [ -f index.html ] && mv index.html painel_pagamentos.html && echo "✅ painel_pagamentos.html criado"
+            [ -f index.html ] && mv index.html painel_pagamentos.html
             [ -f painel_pagamentos.html ] && echo "✅ painel_pagamentos.html criado"
           else
             echo "⚠️ Nenhum arquivo SANKHYA/PAGAMENTO encontrado em dados/"
@@ -91,8 +91,6 @@ jobs:
           [ -f painel_os.html ]          && git add -f painel_os.html
           [ -f painel_pagamentos.html ]  && git add -f painel_pagamentos.html
           [ -f painel_faturamento.html ] && git add -f painel_faturamento.html
-          git restore --staged .github/ 2>/dev/null || true
           git diff --staged --quiet && echo "Nada a commitar" && exit 0
           git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
-          git pull --rebase origin main
-          git push origin main
+          git push origin HEAD:main --force-with-lease
