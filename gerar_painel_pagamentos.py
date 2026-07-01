@@ -10,7 +10,7 @@ from datetime import datetime
 
 ARQUIVO = sys.argv[1] if len(sys.argv) > 1 else "BASE_DE_DADOS_SANKHYA_-_PAGAMENTOS.xlsx"
 LOGO    = sys.argv[2] if len(sys.argv) > 2 else "OIP__1_.webp"
-SAIDA   = "index.html"
+SAIDA   = "painel_pagamentos.html"
 
 if not os.path.exists(ARQUIVO):
     print(f"❌ Arquivo '{ARQUIVO}' não encontrado.")
@@ -259,6 +259,7 @@ td{{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:m
   <div class="header-divider"></div>
   <div class="header-title">Painel de Pagamentos — Sankhya</div>
   <div class="header-spacer"></div>
+  <a href="index.html" style="color:var(--text2);text-decoration:none;font-size:12px;border:1px solid var(--border);padding:6px 14px;border-radius:8px;">&#8592; Hub</a>
   <div class="header-meta"><span class="live-dot"></span>Emissão: <strong>{emissao}</strong><br>Período: {periodo}</div>
 </div></div>
 

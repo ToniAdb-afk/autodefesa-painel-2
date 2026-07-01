@@ -9,7 +9,7 @@ import sys, os, json
 from datetime import datetime
 
 ARQUIVO = sys.argv[1] if len(sys.argv) > 1 else "painel_de_OSS.xlsx"
-SAIDA   = "painel_OSS.html"
+SAIDA   = "painel_os.html"
 
 if not os.path.exists(ARQUIVO):
     print(f"❌ Arquivo '{ARQUIVO}' não encontrado.")
@@ -197,6 +197,7 @@ HTML_HEADER = f"""<!DOCTYPE html>
     <div class="hkpi"><strong style="color:#58a6ff" id="hTotal">—</strong><span>Total OS</span></div>
     <div class="hkpi"><strong style="color:#3fb950" id="hFin">—</strong><span>Finalizadas</span></div>
     <div class="hkpi"><strong style="color:#e3b341" id="hAgu">—</strong><span>Aguardando</span></div>
+    <a href="index.html" style="color:var(--text2);text-decoration:none;font-size:12px;border:1px solid var(--border);padding:6px 14px;border-radius:8px;margin-left:8px;">&#8592; Hub</a>
   </div>
 </div></div>
 <div class="nav"><div class="nav-inner">
