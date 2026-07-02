@@ -49,6 +49,16 @@ df['Mes'] = df['Dt. Negociação'].dt.to_period('M').astype(str)
 emissao        = datetime.now().strftime('%d/%m/%Y %H:%M')
 total_registros = len(df)
 total_valor     = df['Valor Nota/Financ.'].sum()
+
+# ── Dados brutos para filtro/export ───────────────────────────────────
+df_raw = df[['Dt. Negociação','Nome (Solicitante)','Nome Parceiro (Parceiro)',
+             'Valor Nota/Financ.','Status Nota','Nome (Cidade)']].copy()
+df_raw['Dt. Negociação'] = df_raw['Dt. Negociação'].dt.strftime('%d/%m/%Y').fillna('')
+df_raw.columns = ['Data','Solicitante','Parceiro','Valor','Status','Cidade']
+df_raw['Status'] = df_raw['Status'].map({'L':'Liberada','A':'Aguardando'}).fillna('')
+js_raw_pag = json.dumps(df_raw.fillna('').to_dict(orient='records'), ensure_ascii=False)
+solicitantes_list = json.dumps(sorted(df['Nome (Solicitante)'].dropna().unique().tolist()), ensure_ascii=False)
+
 total_fin       = int((df['Status Nota'] == 'L').sum())
 total_agu       = int((df['Status Nota'] == 'A').sum())
 
@@ -170,6 +180,8 @@ const CIDADES={json.dumps(cidades, ensure_ascii=False)};
 const PARCEIROS={json.dumps(parceiros, ensure_ascii=False)};
 const AREAS={json.dumps(areas, ensure_ascii=False)};
 const VENCIMENTOS={json.dumps(vencimentos, ensure_ascii=False)};
+const RAW_PAGAMENTOS={js_raw_pag};
+const SOL_LIST={solicitantes_list};
 """
 
 fmtK_val = round(total_valor/1e6, 2)
@@ -183,6 +195,7 @@ HTML = f"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Autodefesa Brasil — Painel de Pagamentos</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 :root{{--bg:#080b10;--bg2:#0e1420;--bg3:#141c2e;--border:#1e2d4a;--text:#e8edf5;--text2:#7a8ba8;--text3:#4a5f7a;}}
@@ -247,6 +260,16 @@ td{{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:m
 .venc-data{{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}}
 .venc-val{{font-size:20px;font-weight:800;color:#f39c12;}}.venc-val.urgent{{color:#e74c3c;}}
 .no-venc{{text-align:center;padding:40px;color:var(--text2);font-size:13px;}}
+.filtros{{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 24px;margin:0 40px 20px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}}
+.filtro-group{{display:flex;flex-direction:column;gap:6px;}}
+.filtro-group label{{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px;font-weight:600;}}
+.filtro-group select,.filtro-group input{{background:#111824;border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;min-width:160px;}}
+.filtro-group select:focus,.filtro-group input:focus{{border-color:#e74c3c;}}
+.btn-filtro{{padding:8px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;}}
+.btn-limpar{{background:var(--bg3);color:var(--text2);border:1px solid var(--border);}}
+.btn-export{{background:#e74c3c;color:#fff;display:flex;align-items:center;gap:8px;}}
+.btn-export:hover{{background:#c0392b;}}
+.filtro-info{{font-size:12px;color:var(--text3);align-self:center;margin-left:auto;}}
 .footer{{text-align:center;color:var(--text3);font-size:11px;margin-top:16px;padding-bottom:8px;}}
 </style>
 </head>
@@ -271,6 +294,30 @@ td{{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:m
   <div class="nav-tab" onclick="showPage('vencimentos',this)">📅 Vencimentos</div>
 </div></div>
 
+<div class="filtros" id="barra-filtros">
+  <div class="filtro-group">
+    <label>Solicitante</label>
+    <input type="text" id="filtro-sol" placeholder="Buscar solicitante..." oninput="atualizarInfo()">
+  </div>
+  <div class="filtro-group">
+    <label>Status</label>
+    <select id="filtro-status" onchange="atualizarInfo()">
+      <option value="">Todos</option>
+      <option value="Liberada">Liberadas</option>
+      <option value="Aguardando">Aguardando</option>
+    </select>
+  </div>
+  <div class="filtro-group">
+    <label>Cidade</label>
+    <input type="text" id="filtro-cidade" placeholder="Buscar cidade..." oninput="atualizarInfo()">
+  </div>
+  <button class="btn-filtro btn-limpar" onclick="limparFiltrosPag()">✕ Limpar</button>
+  <button class="btn-filtro btn-export" onclick="exportarExcelPag()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    Exportar Excel
+  </button>
+  <span class="filtro-info" id="filtro-info-pag"></span>
+</div>
 <div id="page-visao" class="page active"><div class="container">
   <div class="stitle"><span class="stitle-bar" style="background:#e74c3c"></span>Resumo Executivo — <span id="titPeriodo"></span></div>
   <div class="kpi-grid">
@@ -424,6 +471,55 @@ if(VENCIMENTOS.length===0){{
 if(VENCIMENTOS.length>0){{
   new Chart(document.getElementById('cVenc'),{{type:'bar',data:{{labels:VENCIMENTOS.map(v=>{{const d=new Date(v.d+'T12:00:00');return d.toLocaleDateString('pt-BR',{{day:'2-digit',month:'short'}})}}),datasets:[{{label:'Valor a Vencer',data:VENCIMENTOS.map(v=>v.v),backgroundColor:VENCIMENTOS.map((_,i)=>i<2?'rgba(231,76,60,.85)':'rgba(243,156,18,.7)'),borderRadius:8,borderSkipped:false}}]}},options:{{...CO,plugins:{{...CO.plugins,legend:{{display:false}},tooltip:{{callbacks:{{label:ctx=>` ${{fmt(ctx.parsed.y)}}`}}}}}},scales:sc()}}}});
 }}
+
+// ── FILTRO E EXPORT ──
+function getFiltrados() {
+  const sol    = document.getElementById('filtro-sol').value.toLowerCase();
+  const status = document.getElementById('filtro-status').value;
+  const cidade = document.getElementById('filtro-cidade').value.toLowerCase();
+  return RAW_PAGAMENTOS.filter(r =>
+    (!sol    || r.Solicitante.toLowerCase().includes(sol)) &&
+    (!status || r.Status === status) &&
+    (!cidade || r.Cidade.toLowerCase().includes(cidade))
+  );
+}
+
+function atualizarInfo() {
+  const f = getFiltrados();
+  document.getElementById('filtro-info-pag').textContent =
+    f.length + ' de ' + RAW_PAGAMENTOS.length + ' registros';
+}
+
+function limparFiltrosPag() {
+  ['filtro-sol','filtro-status','filtro-cidade'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  atualizarInfo();
+}
+
+function exportarExcelPag() {
+  const dados = getFiltrados();
+  if (dados.length === 0) { alert('Nenhum dado para exportar.'); return; }
+  const ws_data = [
+    ['Data', 'Solicitante', 'Parceiro', 'Valor (R$)', 'Status', 'Cidade'],
+    ...dados.map(r => [r.Data, r.Solicitante, r.Parceiro, r.Valor, r.Status, r.Cidade])
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+  ws['!cols'] = [{wch:12},{wch:30},{wch:35},{wch:18},{wch:12},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Pagamentos');
+
+  // Aba mensal
+  const ws2_data = [['Mês','Volume (R$)'], ...MONTHLY.map(m => [m.mes, m.valor])];
+  const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Mensal');
+
+  const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+  XLSX.writeFile(wb, `Pagamentos_ADB_${data}.xlsx`);
+}
+
+atualizarInfo();
+
 </script></body></html>"""
 
 with open(SAIDA, 'w', encoding='utf-8') as f:

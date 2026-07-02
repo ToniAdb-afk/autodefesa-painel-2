@@ -92,6 +92,15 @@ js_cs  = json.dumps(pivot_to_list(client_status, STATUSES,'Cliente'), ensure_asc
 js_cu  = json.dumps(client_user_to_list(client_user), ensure_ascii=False)
 js_mon = json.dumps(monthly_to_list(monthly_raw, MOTIVOS), ensure_ascii=False)
 
+
+# ── Dados brutos para export ──────────────────────────────────────────
+df_exp = df[['Dt. Abertura de OS','Nome (Usuário)','Cliente',
+             'Descrição (Motivo - Service)','Descrição (Status de OS - Service)']].copy()
+df_exp['Dt. Abertura de OS'] = df_exp['Dt. Abertura de OS'].dt.strftime('%d/%m/%Y').fillna('')
+df_exp.columns = ['Data','Operador','Cliente','Motivo','Status']
+js_raw = json.dumps(df_exp.fillna('').to_dict(orient='records'), ensure_ascii=False)
+operadores_json = json.dumps(sorted(df['Nome (Usuário)'].dropna().unique().tolist()), ensure_ascii=False)
+clientes_json   = json.dumps(sorted(df['Cliente'].dropna().unique().tolist()), ensure_ascii=False)
 total_fin = int(df[df['Descrição (Status de OS - Service)']=='ATENDIMENTO FINALIZADO'].shape[0])
 total_agu = int(df[df['Descrição (Status de OS - Service)']=='AGUARDANDO ATENDIMENTO'].shape[0])
 
@@ -187,6 +196,19 @@ HTML_HEADER = f"""<!DOCTYPE html>
   .rnum{{font-size:11px;font-weight:700;color:var(--text2);width:18px;text-align:center;flex-shrink:0;}}.rnum.top{{color:var(--yellow);}}
   .rbar-wrap{{flex:1;}}.rname{{font-size:11px;font-weight:500;margin-bottom:3px;}}.rbar{{height:4px;background:var(--bg3);border-radius:4px;overflow:hidden;}}.rbar-fill{{height:100%;border-radius:4px;}}
   .rcount{{font-size:13px;font-weight:700;flex-shrink:0;min-width:32px;text-align:right;}}
+  
+  /* ── FILTROS ── */
+  .filtros{{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 24px;margin-bottom:24px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}}
+  .filtro-group{{display:flex;flex-direction:column;gap:6px;}}
+  .filtro-group label{{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px;font-weight:600;}}
+  .filtro-group select,.filtro-group input{{background:#111824;border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;min-width:160px;}}
+  .filtro-group select:focus,.filtro-group input:focus{{border-color:#58a6ff;}}
+  .btn-filtro{{padding:8px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;}}
+  .btn-limpar{{background:var(--bg3);color:var(--text2);border:1px solid var(--border);}}
+  .btn-limpar:hover{{color:var(--text);}}
+  .btn-export{{background:#58a6ff;color:#0d1117;display:flex;align-items:center;gap:8px;}}
+  .btn-export:hover{{background:#79b8ff;}}
+  .filtro-info{{font-size:12px;color:var(--text2);align-self:center;margin-left:auto;}}
   .footer{{text-align:center;color:var(--text2);font-size:11px;margin-top:24px;padding:0 40px;}}
 </style>
 </head>
@@ -483,6 +505,76 @@ const sb2=(key)=>[...allUsers].sort((a,b)=>g(umMap[b]||{},key)-g(umMap[a]||{},ke
 bRank('rankCorr',  sb2('MANUTENÇÃO CORRETIVA'),  '#da3633');
 bRank('rankPrev',  sb2('MANUTENÇÃO PREVENTIVA'), '#d29922');
 bRank('rankRemoto',sb2('ATENDIMENTO REMOTO'),    '#39c5cf');
+
+// ── FILTROS ──
+const selCli = document.getElementById('filtro-cli');
+CLIENTES_LIST.forEach(c => {{ const o = document.createElement('option'); o.value = c; o.textContent = c; selCli.appendChild(o); }});
+
+function parseDt(s) {{
+  if (!s) return null;
+  const [d,m,y] = s.split('/'); return new Date(y,m-1,d);
+}}
+
+function aplicarFiltros() {{
+  const op  = document.getElementById('filtro-op').value.toLowerCase();
+  const cli = document.getElementById('filtro-cli').value;
+  const st  = document.getElementById('filtro-status').value;
+  const dtI = document.getElementById('filtro-dt-ini').value ? new Date(document.getElementById('filtro-dt-ini').value) : null;
+  const dtF = document.getElementById('filtro-dt-fim').value ? new Date(document.getElementById('filtro-dt-fim').value) : null;
+
+  const filtrados = RAW.filter(r => {{
+    const matchOp  = !op  || r.Operador.toLowerCase().includes(op);
+    const matchCli = !cli || r.Cliente === cli;
+    const matchSt  = !st  || r.Status === st;
+    const dt = parseDt(r.Data);
+    const matchDtI = !dtI || !dt || dt >= dtI;
+    const matchDtF = !dtF || !dt || dt <= dtF;
+    return matchOp && matchCli && matchSt && matchDtI && matchDtF;
+  }});
+  document.getElementById('filtro-info').textContent = filtrados.length + ' de ' + RAW.length + ' registros';
+}}
+
+function limparFiltros() {{
+  ['filtro-op','filtro-cli','filtro-status','filtro-dt-ini','filtro-dt-fim'].forEach(id => {{
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  }});
+  aplicarFiltros();
+}}
+
+function exportarExcel() {{
+  const op  = document.getElementById('filtro-op').value.toLowerCase();
+  const cli = document.getElementById('filtro-cli').value;
+  const st  = document.getElementById('filtro-status').value;
+  const dtI = document.getElementById('filtro-dt-ini').value ? new Date(document.getElementById('filtro-dt-ini').value) : null;
+  const dtF = document.getElementById('filtro-dt-fim').value ? new Date(document.getElementById('filtro-dt-fim').value) : null;
+
+  const dados = RAW.filter(r => {{
+    const matchOp  = !op  || r.Operador.toLowerCase().includes(op);
+    const matchCli = !cli || r.Cliente === cli;
+    const matchSt  = !st  || r.Status === st;
+    const dt = parseDt(r.Data);
+    const matchDtI = !dtI || !dt || dt >= dtI;
+    const matchDtF = !dtF || !dt || dt <= dtF;
+    return matchOp && matchCli && matchSt && matchDtI && matchDtF;
+  }});
+
+  if (dados.length === 0) {{ alert('Nenhum dado para exportar.'); return; }}
+
+  const ws_data = [
+    ['Data', 'Operador', 'Cliente', 'Motivo', 'Status'],
+    ...dados.map(r => [r.Data, r.Operador, r.Cliente, r.Motivo, r.Status])
+  ];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+  ws['!cols'] = [{{wch:12}},{{wch:30}},{{wch:20}},{{wch:30}},{{wch:30}}];
+  XLSX.utils.book_append_sheet(wb, ws, 'OS');
+  const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+  XLSX.writeFile(wb, `OS_ADB_${{data}}.xlsx`);
+}}
+
+aplicarFiltros();
+
 </script></body></html>
 """
 
