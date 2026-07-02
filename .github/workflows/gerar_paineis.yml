@@ -9,6 +9,13 @@ on:
 permissions:
   contents: write
 
+# Evita que dois workflows rodem em paralelo no mesmo branch.
+# Essa é a causa mais comum de "push rejected (non-fast-forward)":
+# dois jobs concorrentes tentando dar push na main ao mesmo tempo.
+concurrency:
+  group: gerar-paineis-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -78,8 +85,57 @@ jobs:
             echo "⚠️ Nenhum arquivo de FATURAMENTO encontrado em dados/"
           fi
 
+      - name: Gerar Painel de Indisponibilidade
+        run: |
+          ARQ_AL=$(find dados/ -iname "*indisponibilidade*" ! -iname "*imvictos*" -name "*.xlsx" | head -1)
+          ARQ_CFTV=$(find dados/ -iname "*indisponibilidade*imvictos*" -name "*.xlsx" | head -1)
+          if [ -n "$ARQ_AL" ] && [ -n "$ARQ_CFTV" ]; then
+            echo "✅ Gerando Painel de Indisponibilidade com: $ARQ_AL + $ARQ_CFTV"
+            python gerar_painel_indisponibilidade.py "$ARQ_AL" "$ARQ_CFTV" "historico_indisponibilidade.json"
+            [ -f painel_indisponibilidade.html ] && echo "✅ painel_indisponibilidade.html criado"
+          else
+            echo "⚠️ Não encontrei as duas planilhas de indisponibilidade em dados/ (alarmes + imvictos/CFTV)"
+          fi
+
       - name: Restaurar hub de entrada
         run: cp hub_index.html index.html
+
+      - name: Validar integridade dos painéis gerados
+        run: |
+          echo "=== Validando painéis ==="
+          FALHOU=0
+          for PAINEL in painel_os.html painel_pagamentos.html painel_faturamento.html painel_indisponibilidade.html; do
+            if [ -f "$PAINEL" ]; then
+              TAMANHO=$(stat -c%s "$PAINEL")
+              # Um painel real tem centenas de KB (dados tabulares).
+              # Se sair pequeno demais ou idêntico ao hub, algo quebrou.
+              if [ "$TAMANHO" -lt 20000 ]; then
+                echo "❌ $PAINEL suspeito: apenas $TAMANHO bytes (esperado > 20000)"
+                FALHOU=1
+              fi
+              if cmp -s "$PAINEL" "index.html"; then
+                echo "❌ $PAINEL é idêntico ao index.html (hub) — geração falhou silenciosamente"
+                FALHOU=1
+              fi
+              if [ "$FALHOU" -eq 0 ]; then
+                echo "✅ $PAINEL ok ($TAMANHO bytes)"
+              fi
+            fi
+          done
+          if [ "$FALHOU" -eq 1 ]; then
+            echo "🛑 Abortando: pelo menos um painel saiu corrompido. Não vou commitar/pushar assim."
+            exit 1
+          fi
+
+      - name: Sincronizar com o remoto antes do push
+        run: |
+          git fetch origin main
+          # Rebase silencioso: se a main andou enquanto o job rodava, realinha.
+          git rebase origin/main || {
+            echo "🛑 Conflito ao sincronizar com origin/main. Abortando push automático.";
+            git rebase --abort;
+            exit 1;
+          }
 
       - name: Commit e Push dos painéis
         env:
@@ -92,6 +148,23 @@ jobs:
           [ -f painel_os.html ]          && git add -f painel_os.html
           [ -f painel_pagamentos.html ]  && git add -f painel_pagamentos.html
           [ -f painel_faturamento.html ] && git add -f painel_faturamento.html
+          [ -f painel_indisponibilidade.html ] && git add -f painel_indisponibilidade.html
+          [ -f historico_indisponibilidade.json ] && git add -f historico_indisponibilidade.json
           git diff --staged --quiet && echo "Nada a commitar" && exit 0
           git commit -m "🤖 Painéis atualizados [$(date '+%d/%m/%Y %H:%M')]"
-          git push origin HEAD:main
+
+          # Tenta o push; se for rejeitado por non-fast-forward, sincroniza e tenta de novo (até 3x).
+          for i in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "✅ Push concluído com sucesso."
+              break
+            else
+              echo "⚠️ Push rejeitado (tentativa $i/3). Sincronizando e tentando novamente..."
+              git fetch origin main
+              git rebase origin/main || { echo "🛑 Conflito no rebase. Intervenção manual necessária."; exit 1; }
+              if [ "$i" -eq 3 ]; then
+                echo "🛑 Falha ao dar push após 3 tentativas."
+                exit 1
+              fi
+            fi
+          done
