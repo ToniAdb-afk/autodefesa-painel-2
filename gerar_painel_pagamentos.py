@@ -57,7 +57,6 @@ df_raw['Dt. Negociação'] = df_raw['Dt. Negociação'].dt.strftime('%d/%m/%Y').
 df_raw.columns = ['Data','Solicitante','Parceiro','Valor','Status','Cidade']
 df_raw['Status'] = df_raw['Status'].map({'L':'Liberada','A':'Aguardando'}).fillna('')
 js_raw_pag = json.dumps(df_raw.fillna('').to_dict(orient='records'), ensure_ascii=False)
-solicitantes_list = json.dumps(sorted(df['Nome (Solicitante)'].dropna().unique().tolist()), ensure_ascii=False)
 
 total_fin       = int((df['Status Nota'] == 'L').sum())
 total_agu       = int((df['Status Nota'] == 'A').sum())
@@ -180,8 +179,7 @@ const CIDADES={json.dumps(cidades, ensure_ascii=False)};
 const PARCEIROS={json.dumps(parceiros, ensure_ascii=False)};
 const AREAS={json.dumps(areas, ensure_ascii=False)};
 const VENCIMENTOS={json.dumps(vencimentos, ensure_ascii=False)};
-const RAW_PAGAMENTOS={js_raw_pag};
-const SOL_LIST={solicitantes_list};
+const RAW_PAG={js_raw_pag};
 """
 
 fmtK_val = round(total_valor/1e6, 2)
@@ -264,7 +262,6 @@ td{{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:m
 .filtro-group{{display:flex;flex-direction:column;gap:6px;}}
 .filtro-group label{{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px;font-weight:600;}}
 .filtro-group select,.filtro-group input{{background:#111824;border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;min-width:160px;}}
-.filtro-group select:focus,.filtro-group input:focus{{border-color:#e74c3c;}}
 .btn-filtro{{padding:8px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s;}}
 .btn-limpar{{background:var(--bg3);color:var(--text2);border:1px solid var(--border);}}
 .btn-export{{background:#e74c3c;color:#fff;display:flex;align-items:center;gap:8px;}}
@@ -294,14 +291,14 @@ td{{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:m
   <div class="nav-tab" onclick="showPage('vencimentos',this)">📅 Vencimentos</div>
 </div></div>
 
-<div class="filtros" id="barra-filtros">
+<div class="filtros">
   <div class="filtro-group">
     <label>Solicitante</label>
-    <input type="text" id="filtro-sol" placeholder="Buscar solicitante..." oninput="atualizarInfo()">
+    <input type="text" id="filtro-sol" placeholder="Buscar..." oninput="atualizarInfoPag()">
   </div>
   <div class="filtro-group">
     <label>Status</label>
-    <select id="filtro-status" onchange="atualizarInfo()">
+    <select id="filtro-status-pag" onchange="atualizarInfoPag()">
       <option value="">Todos</option>
       <option value="Liberada">Liberadas</option>
       <option value="Aguardando">Aguardando</option>
@@ -309,15 +306,13 @@ td{{padding:12px 14px;border-bottom:1px solid rgba(30,45,74,.5);vertical-align:m
   </div>
   <div class="filtro-group">
     <label>Cidade</label>
-    <input type="text" id="filtro-cidade" placeholder="Buscar cidade..." oninput="atualizarInfo()">
+    <input type="text" id="filtro-cidade-pag" placeholder="Buscar..." oninput="atualizarInfoPag()">
   </div>
-  <button class="btn-filtro btn-limpar" onclick="limparFiltrosPag()">✕ Limpar</button>
-  <button class="btn-filtro btn-export" onclick="exportarExcelPag()">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-    Exportar Excel
-  </button>
+  <button class="btn-filtro btn-limpar" onclick="limparFiltrosPag()">&#10005; Limpar</button>
+  <button class="btn-filtro btn-export" onclick="exportarExcelPag()">&#8595; Exportar Excel</button>
   <span class="filtro-info" id="filtro-info-pag"></span>
 </div>
+
 <div id="page-visao" class="page active"><div class="container">
   <div class="stitle"><span class="stitle-bar" style="background:#e74c3c"></span>Resumo Executivo — <span id="titPeriodo"></span></div>
   <div class="kpi-grid">
@@ -472,53 +467,45 @@ if(VENCIMENTOS.length>0){{
   new Chart(document.getElementById('cVenc'),{{type:'bar',data:{{labels:VENCIMENTOS.map(v=>{{const d=new Date(v.d+'T12:00:00');return d.toLocaleDateString('pt-BR',{{day:'2-digit',month:'short'}})}}),datasets:[{{label:'Valor a Vencer',data:VENCIMENTOS.map(v=>v.v),backgroundColor:VENCIMENTOS.map((_,i)=>i<2?'rgba(231,76,60,.85)':'rgba(243,156,18,.7)'),borderRadius:8,borderSkipped:false}}]}},options:{{...CO,plugins:{{...CO.plugins,legend:{{display:false}},tooltip:{{callbacks:{{label:ctx=>` ${{fmt(ctx.parsed.y)}}`}}}}}},scales:sc()}}}});
 }}
 
-// ── FILTRO E EXPORT ──
-function getFiltrados() {
+// ── FILTROS E EXPORT ──
+function getFiltradosPag() {{
   const sol    = document.getElementById('filtro-sol').value.toLowerCase();
-  const status = document.getElementById('filtro-status').value;
-  const cidade = document.getElementById('filtro-cidade').value.toLowerCase();
-  return RAW_PAGAMENTOS.filter(r =>
+  const status = document.getElementById('filtro-status-pag').value;
+  const cidade = document.getElementById('filtro-cidade-pag').value.toLowerCase();
+  return RAW_PAG.filter(r =>
     (!sol    || r.Solicitante.toLowerCase().includes(sol)) &&
     (!status || r.Status === status) &&
     (!cidade || r.Cidade.toLowerCase().includes(cidade))
   );
-}
-
-function atualizarInfo() {
-  const f = getFiltrados();
-  document.getElementById('filtro-info-pag').textContent =
-    f.length + ' de ' + RAW_PAGAMENTOS.length + ' registros';
-}
-
-function limparFiltrosPag() {
-  ['filtro-sol','filtro-status','filtro-cidade'].forEach(id => {
+}}
+function atualizarInfoPag() {{
+  const f = getFiltradosPag();
+  document.getElementById('filtro-info-pag').textContent = f.length + ' de ' + RAW_PAG.length + ' registros';
+}}
+function limparFiltrosPag() {{
+  ['filtro-sol','filtro-status-pag','filtro-cidade-pag'].forEach(id => {{
     document.getElementById(id).value = '';
-  });
-  atualizarInfo();
-}
-
-function exportarExcelPag() {
-  const dados = getFiltrados();
-  if (dados.length === 0) { alert('Nenhum dado para exportar.'); return; }
+  }});
+  atualizarInfoPag();
+}}
+function exportarExcelPag() {{
+  const dados = getFiltradosPag();
+  if (dados.length === 0) {{ alert('Nenhum dado para exportar.'); return; }}
   const ws_data = [
-    ['Data', 'Solicitante', 'Parceiro', 'Valor (R$)', 'Status', 'Cidade'],
+    ['Data','Solicitante','Parceiro','Valor (R$)','Status','Cidade'],
     ...dados.map(r => [r.Data, r.Solicitante, r.Parceiro, r.Valor, r.Status, r.Cidade])
   ];
+  const ws2_data = [['Mes','Volume (R$)'], ...MONTHLY.map(m => [m.mes, m.valor])];
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(ws_data);
-  ws['!cols'] = [{wch:12},{wch:30},{wch:35},{wch:18},{wch:12},{wch:20}];
+  const ws  = XLSX.utils.aoa_to_sheet(ws_data);
+  ws['!cols'] = [{{wch:12}},{{wch:30}},{{wch:35}},{{wch:18}},{{wch:12}},{{wch:20}}];
   XLSX.utils.book_append_sheet(wb, ws, 'Pagamentos');
-
-  // Aba mensal
-  const ws2_data = [['Mês','Volume (R$)'], ...MONTHLY.map(m => [m.mes, m.valor])];
   const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
   XLSX.utils.book_append_sheet(wb, ws2, 'Mensal');
-
-  const data = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-  XLSX.writeFile(wb, `Pagamentos_ADB_${data}.xlsx`);
-}
-
-atualizarInfo();
+  const hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
+  XLSX.writeFile(wb, 'Pagamentos_ADB_' + hoje + '.xlsx');
+}}
+atualizarInfoPag();
 
 </script></body></html>"""
 
