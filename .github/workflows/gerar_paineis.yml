@@ -57,7 +57,6 @@ jobs:
             else
               python gerar_painel_pagamentos.py "$ARQUIVO"
             fi
-            [ -f index.html ] && mv index.html painel_pagamentos.html
             [ -f painel_pagamentos.html ] && echo "✅ painel_pagamentos.html criado"
           else
             echo "⚠️ Nenhum arquivo SANKHYA/PAGAMENTO encontrado em dados/"
