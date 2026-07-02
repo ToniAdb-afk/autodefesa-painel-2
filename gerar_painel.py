@@ -230,6 +230,41 @@ HTML_HEADER = f"""<!DOCTYPE html>
 """
 
 HTML_PAGES = """
+<div id="filtros-os" style="max-width:1440px;margin:0 auto;padding:24px 40px 0;">
+  <div class="filtros">
+    <div class="filtro-group">
+      <label>Operador</label>
+      <input type="text" id="fil-op" placeholder="Buscar operador..." oninput="filInfo()">
+    </div>
+    <div class="filtro-group">
+      <label>Cliente</label>
+      <select id="fil-cli" onchange="filInfo()">
+        <option value="">Todos os clientes</option>
+      </select>
+    </div>
+    <div class="filtro-group">
+      <label>Status</label>
+      <select id="fil-st" onchange="filInfo()">
+        <option value="">Todos</option>
+        <option value="ATENDIMENTO FINALIZADO">Finalizado</option>
+        <option value="AGUARDANDO ATENDIMENTO">Aguardando</option>
+        <option value="EM ATENDIMENTO">Em Atendimento</option>
+      </select>
+    </div>
+    <div class="filtro-group">
+      <label>Data Inicio</label>
+      <input type="date" id="fil-dt-i" onchange="filInfo()">
+    </div>
+    <div class="filtro-group">
+      <label>Data Fim</label>
+      <input type="date" id="fil-dt-f" onchange="filInfo()">
+    </div>
+    <button class="btn-fil btn-clear" onclick="filClear()">&#10005; Limpar</button>
+    <button class="btn-fil btn-exp" onclick="filExport()">&#8595; Exportar Excel</button>
+    <span class="fil-info" id="fil-info"></span>
+  </div>
+</div>
+
 <div id="page-geral" class="page active"><div class="container">
   <div class="stitle"><span class="dot" style="background:#3fb950"></span>Resumo por Tipo de OS</div>
   <div class="kpi-grid" id="kpiGrid"></div>
